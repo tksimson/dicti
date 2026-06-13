@@ -13,7 +13,7 @@ fi
 
 echo "==> Verifying Debian-shipped ydotool.service"
 if ! systemctl --user list-unit-files ydotool.service 2>/dev/null | grep -q ydotool; then
-  echo "ydotool.service not found — is the 'ydotool' apt package installed?"
+  echo "ydotool.service not found, is the 'ydotool' apt package installed?"
   exit 1
 fi
 
@@ -41,7 +41,7 @@ echo
 echo "==> Smoke test: in 3 seconds, ydotool will type 'hello' into the FOCUSED window."
 echo "    Focus a safe text input (e.g. an editor) NOW."
 sleep 3
-ydotool type "hello" || echo "    (typing failed — check 'groups | grep input' and try logout/login)"
+ydotool type "hello" || echo "    (typing failed, check 'groups | grep input' and try logout/login)"
 
 echo
 echo "    NEXT: bash 06-bind-shortcuts.sh"

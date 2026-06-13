@@ -43,7 +43,7 @@ systemctl --user daemon-reload
 systemctl --user enable dictation.service
 systemctl --user restart dictation.service
 # Note: dicti-indicator.service (AppIndicator) is installed but NOT enabled by
-# default — the GNOME Shell extension (phase 7) is the preferred indicator. The
+# default, the GNOME Shell extension (phase 7) is the preferred indicator. The
 # AppIndicator service stays available for non-GNOME desktops.
 
 sleep 1

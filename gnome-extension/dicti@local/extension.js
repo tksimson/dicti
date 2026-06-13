@@ -1,4 +1,4 @@
-/* dicti dictation — GNOME Shell panel indicator.
+/* dicti dictation, GNOME Shell panel indicator.
  *
  * One icon that mirrors the daemon's state file ($XDG_RUNTIME_DIR/dictation.state).
  * Left-click toggles dictation; right-click opens a Toggle / Cancel menu. No

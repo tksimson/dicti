@@ -34,7 +34,7 @@ echo "==> Then enable it:"
 echo "      gnome-extensions enable $UUID"
 echo "    (or via the Extensions app). Trying now in case the shell already sees it:"
 gnome-extensions enable "$UUID" 2>/dev/null && echo "    enabled." \
-  || echo "    not yet visible — reload the shell first, then run the enable command above."
+  || echo "    not yet visible, reload the shell first, then run the enable command above."
 echo
 echo "==> Once dicti shows its own icon, you can turn OFF the generic"
 echo "    'AppIndicator and KStatusNotifierItem Support' extension if you only"

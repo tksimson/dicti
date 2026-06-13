@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dicti tray indicator (OPTIONAL — for non-GNOME desktops).
+dicti tray indicator (OPTIONAL, for non-GNOME desktops).
 
 On GNOME, prefer the GNOME Shell extension in `gnome-extension/dicti@local`
 (installed by `install/07-install-gnome-extension.sh`): it shows a single icon
@@ -39,7 +39,7 @@ from gi.repository import Gio, GLib, Gtk
 
 _XDG = os.environ.get("XDG_RUNTIME_DIR")
 if not _XDG:
-    raise SystemExit("XDG_RUNTIME_DIR not set — indicator must run inside a logind user session")
+    raise SystemExit("XDG_RUNTIME_DIR not set, indicator must run inside a logind user session")
 
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"

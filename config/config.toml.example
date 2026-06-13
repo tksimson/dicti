@@ -1,4 +1,4 @@
-# dicti configuration — copy to ~/.config/dicti/config.toml and edit.
+# dicti configuration, copy to ~/.config/dicti/config.toml and edit.
 # All keys are optional; anything omitted uses the built-in default shown here.
 
 # --- Whisper backend ---

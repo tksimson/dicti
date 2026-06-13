@@ -11,12 +11,12 @@ if [[ $EUID -eq 0 ]]; then
 fi
 
 if ! command -v gsettings >/dev/null; then
-  echo "gsettings not found — this script targets GNOME. Bind the shortcut manually otherwise."
+  echo "gsettings not found, this script targets GNOME. Bind the shortcut manually otherwise."
   exit 1
 fi
 
 CMD="$HOME/.local/bin/dictate-toggle"
-[[ -x "$CMD" ]] || { echo "Missing $CMD — run 04-install-daemon.sh first"; exit 1; }
+[[ -x "$CMD" ]] || { echo "Missing $CMD, run 04-install-daemon.sh first"; exit 1; }
 
 SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
 PATH_PREFIX="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"

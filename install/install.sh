@@ -1,6 +1,6 @@
 #!/bin/bash
 # dicti guided installer. Runs the numbered phases in order, using sudo only
-# where required. Idempotent — safe to re-run. Run as your normal user.
+# where required. Idempotent, safe to re-run. Run as your normal user.
 #
 #   bash install/install.sh
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dicti — local dictation daemon.
+dicti, local dictation daemon.
 
 Listens on a unix socket for START / STOP / TOGGLE / CANCEL / STATUS commands.
 On START, records mic audio via pw-record. A background monitor watches the
@@ -19,7 +19,7 @@ dead key. Current state is mirrored to $XDG_RUNTIME_DIR/dictation.state on every
 transition so the tray indicator can follow along.
 
 At startup, the daemon reads the whisper-server journal for this boot and
-escalates if Vulkan didn't engage — we'd rather know immediately than after
+escalates if Vulkan didn't engage, we'd rather know immediately than after
 30 seconds of confusion.
 
 Logs to journal (stdout/stderr) when run as a systemd user service.
@@ -44,7 +44,7 @@ from dicti.config import Config
 
 _XDG = os.environ.get("XDG_RUNTIME_DIR")
 if not _XDG:
-    raise SystemExit("XDG_RUNTIME_DIR not set — daemon must run inside a logind user session")
+    raise SystemExit("XDG_RUNTIME_DIR not set, daemon must run inside a logind user session")
 
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"
@@ -63,7 +63,7 @@ _INLINE_NON_SPEECH_RE = re.compile(
 )
 
 # Whisper hallucinates these on silent/low-energy audio (trained on YouTube etc.).
-# Only dropped when a whole segment IS one of them — distinctive enough not to be
+# Only dropped when a whole segment IS one of them, distinctive enough not to be
 # real dictation. "amara.org" subtitle credits are matched as a substring.
 _HALLUCINATION_PHRASES = {
     "thanks for watching", "thanks for watching everyone", "thanks for watching this video",
@@ -190,7 +190,7 @@ class Daemon:
             self.silence_stop.clear()
             self.silence_thread = threading.Thread(target=self._monitor_silence, daemon=True)
             self.silence_thread.start()
-        # No "listening" popup by design — the tray indicator shows the state.
+        # No "listening" popup by design, the tray indicator shows the state.
         log.info("Listening (max %ds, auto-stop after %ds silence)",
                  self.cfg.max_record_sec, self.cfg.silence_timeout_sec)
 
@@ -435,7 +435,7 @@ class Daemon:
             log.info("whisper-server backend OK: Vulkan engaged")
         elif "no GPU found" in out or "No devices found" in out:
             log.error(
-                "whisper-server fell back to CPU — inference will be 4-5x slower. "
+                "whisper-server fell back to CPU, inference will be 4-5x slower. "
                 "Fix: `systemctl --user restart whisper-server` "
                 "(graphical session must be up)"
             )
@@ -446,7 +446,7 @@ class Daemon:
                 timeout_ms=8000,
             )
         else:
-            log.warning("whisper-server backend status unknown — no Vulkan/GPU markers in journal")
+            log.warning("whisper-server backend status unknown, no Vulkan/GPU markers in journal")
 
     # ---- socket server -----------------------------------------------------
 

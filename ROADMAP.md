@@ -4,24 +4,24 @@ dicti is a local, offline live-dictation tool for Linux. The aim: the
 best-in-class push-to-talk dictation experience on Linux, GNOME first, then
 broader desktops and distros.
 
-## v0.2 — Daily-driver fixes (current)
+## v0.2, Daily-driver fixes (current)
 
 The everyday-pain release. All shipped:
 
-- **Long sessions** — `max_record_sec` raised to 1 hour (was a 60s hard cap that
+- **Long sessions**, `max_record_sec` raised to 1 hour (was a 60s hard cap that
   cut people off mid-sentence).
-- **Silence auto-stop** — a monitor samples the recording's RMS and stops after
+- **Silence auto-stop**, a monitor samples the recording's RMS and stops after
   `silence_timeout_sec` (default 180s) of real silence, instead of a blind timer.
-- **Universal text insertion** — transcript is typed via `ydotool type` (works in
+- **Universal text insertion**, transcript is typed via `ydotool type` (works in
   plain editors, IDEs, terminals; no Markdown-render-on-paste), clipboard kept as
   a safety net.
-- **Subtle tray indicator** — top-bar AppIndicator with idle / listening /
+- **Subtle tray indicator**, top-bar AppIndicator with idle / listening /
   transcribing states; the "listening" popup is gone.
-- **Config file** — `~/.config/dicti/config.toml` for timeouts, language, insertion
+- **Config file**, `~/.config/dicti/config.toml` for timeouts, language, insertion
   method and silence thresholds.
-- **Repo** — became the public MIT project (ported from a private prototype).
+- **Repo**, became the public MIT project (ported from a private prototype).
 
-## v0.3 — Mac-like live streaming (next, biggest piece)
+## v0.3, Mac-like live streaming (next, biggest piece)
 
 Goal: text appears and **self-corrects as you speak**, like macOS dictation,
 instead of arriving all at once at the end.
@@ -45,7 +45,7 @@ instead of arriving all at once at the end.
 Risk: per-chunk accuracy is lower than whole-file batch unless the
 overlapping-context rewrite is done well. That's why it's its own release.
 
-## Future — Reach & polish
+## Future, Reach & polish
 
 - **Wayland** insertion and clipboard (`wtype` / `wl-copy`) as alternatives to
   `ydotool`/`xclip`; detect session type.
