@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dicti"
+version = "0.2.0"
+description = "Local, offline live dictation for Linux (GNOME) — Whisper + push-to-talk"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "tksimson" }]
+keywords = ["dictation", "speech-to-text", "whisper", "linux", "gnome", "accessibility"]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+# Tray indicator. PyGObject + AppIndicator are usually installed via the distro
+# package manager (python3-gi, gir1.2-ayatanaappindicator3-0.1) rather than pip,
+# so they are listed here only for documentation.
+indicator = ["PyGObject>=3.42"]
+
+[project.scripts]
+dicti-daemon = "dicti.daemon:main"
+dicti-indicator = "dicti.indicator:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

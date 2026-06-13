@@ -1,0 +1,5 @@
+#!/bin/sh
+# Send a command to the dicti dictation daemon.
+# Usage: dictate-toggle [START|STOP|TOGGLE|CANCEL|STATUS]
+# Default: TOGGLE.
+exec printf '%s' "${1:-TOGGLE}" | nc -U -q1 "$XDG_RUNTIME_DIR/dictation.sock"

@@ -1,45 +1,29 @@
 # Changelog
 
-All notable changes to Dicti - Linux Live Dictation will be documented in this file.
+All notable changes to dicti are documented here. Format loosely follows
+[Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.0] - 2026-06-13
 
-## [0.1.0] - 2024-09-15
+First public release. The project was rebuilt around the working whisper.cpp
+daemon (a private prototype) and made into an MIT open-source tool.
 
 ### Added
-- Initial release of Dicti - Linux Live Dictation
-- Real-time streaming audio capture using FFmpeg
-- Whisper-based speech-to-text processing with auto language detection
-- Global hotkey support for activation/deactivation (requires root)
-- Continuous listening with 2-3 second audio chunks
-- Auto-termination after 60 seconds of silence
-- Support for English and Polish languages
-- Real-time text insertion at cursor position
-- Clipboard integration for text output
-- Modular architecture with clean separation of concerns
-- Comprehensive error handling and logging
-- Demo mode for testing without root privileges
-- Command-line interface with multiple options
-- Virtual environment setup and dependency management
+- Silence-based auto-stop: a monitor samples the recording's RMS and ends the
+  session after `silence_timeout_sec` (default 180s) of real silence.
+- Universal text insertion via `ydotool type` (works in plain editors, IDEs and
+  terminals); clipboard copy retained as a safety net.
+- Top-bar tray indicator (`dicti-indicator`) showing idle / listening /
+  transcribing, driven by a state file the daemon writes.
+- Config file at `~/.config/dicti/config.toml` (timeouts, language, insertion
+  method, silence thresholds), loaded via stdlib `tomllib`.
+- Guided installer (`install/install.sh`) and `pyproject.toml` with console scripts.
 
-### Features
-- **Streaming Audio Capture**: Continuous microphone input with silence detection
-- **Streaming Whisper Engine**: Real-time speech processing with language detection
-- **Global Hotkey Manager**: Double-tap activation with configurable keys
-- **Text Output Handler**: Real-time text insertion and clipboard support
-- **Main Application**: Coordinated component management
+### Changed
+- Recording cap raised from a hard 60s to a 1-hour `max_record_sec` safety backstop.
+- Insertion default switched from clipboard + Ctrl+Shift+V to direct typing.
+- The "listening" startup notification was removed in favour of the tray indicator.
 
-### Technical Details
-- Python 3.13+ support
-- FFmpeg for audio processing
-- OpenAI Whisper for speech recognition
-- NumPy for audio analysis
-- Cross-platform keyboard input simulation
-- Modular, event-driven architecture
-
-### Known Limitations
-- Global hotkeys require root privileges on Linux
-- Clipboard support requires xclip or xsel installation
-- Whisper models downloaded on first use (72MB+ for tiny model)
-- Audio device detection limited to PulseAudio systems
+### Architecture
+- whisper.cpp HTTP server (Vulkan, `ggml-medium-q5_0`), PipeWire `pw-record`,
+  keyd key remap, GNOME custom shortcut → unix-socket daemon. X11/GNOME 48.

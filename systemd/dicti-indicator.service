@@ -1,0 +1,16 @@
+[Unit]
+Description=dicti tray indicator (top-bar dictation status)
+After=graphical-session.target dictation.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# @SRC@ is substituted with the repo's src/ dir by install/04-install-daemon.sh
+Environment=PYTHONPATH=@SRC@
+ExecStart=/usr/bin/python3 -m dicti.indicator
+Restart=on-failure
+RestartSec=3
+PassEnvironment=DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR
+
+[Install]
+WantedBy=graphical-session.target
