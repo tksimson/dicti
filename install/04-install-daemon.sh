@@ -40,8 +40,11 @@ case ":$PATH:" in
 esac
 
 systemctl --user daemon-reload
-systemctl --user enable dictation.service dicti-indicator.service
-systemctl --user restart dictation.service dicti-indicator.service
+systemctl --user enable dictation.service
+systemctl --user restart dictation.service
+# Note: dicti-indicator.service (AppIndicator) is installed but NOT enabled by
+# default — the GNOME Shell extension (phase 7) is the preferred indicator. The
+# AppIndicator service stays available for non-GNOME desktops.
 
 sleep 1
 systemctl --user --no-pager status dictation.service | head -12
@@ -53,3 +56,4 @@ echo "      dictate-toggle STOP    # transcribed text should type into the focus
 echo
 echo "    NEXT: bash 05-install-ydotool.sh   (if not already done)"
 echo "    THEN: bash 06-bind-shortcuts.sh"
+echo "    THEN: bash 07-install-gnome-extension.sh   (top-bar indicator)"

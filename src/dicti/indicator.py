@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-dicti tray indicator.
+dicti tray indicator (OPTIONAL — for non-GNOME desktops).
+
+On GNOME, prefer the GNOME Shell extension in `gnome-extension/dicti@local`
+(installed by `install/07-install-gnome-extension.sh`): it shows a single icon
+without pulling in every other app's tray icon. This AppIndicator-based
+indicator is kept for KDE/other desktops; it requires `python3-gi` and
+`gir1.2-ayatanaappindicator3-0.1`, and on GNOME also the generic AppIndicator
+extension. Run it via `dicti-indicator.service` (installed but not enabled by
+default).
 
 A small top-bar AppIndicator that mirrors the daemon's dictation state. It
 watches $XDG_RUNTIME_DIR/dictation.state (written by the daemon on every

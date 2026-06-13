@@ -32,9 +32,6 @@ apt install -y \
   python3-venv \
   python3-pip \
   python3-requests \
-  python3-gi \
-  gir1.2-ayatanaappindicator3-0.1 \
-  gnome-shell-extension-appindicator \
   xclip \
   netcat-openbsd \
   cmake \
@@ -71,5 +68,7 @@ done
 echo
 echo "==> Pre-flight done."
 echo "    NEXT: log out and back in (or reboot) so 'input' group membership takes effect."
-echo "    If on GNOME, also enable the AppIndicator extension once (Extensions app)."
+echo "    The top-bar indicator is a dicti GNOME Shell extension (installed in phase 7),"
+echo "    so no generic AppIndicator extension is needed. (Only the optional non-GNOME"
+echo "    indicator.py needs: python3-gi gir1.2-ayatanaappindicator3-0.1.)"
 echo "    Then run: sudo bash 01-install-keyd.sh"

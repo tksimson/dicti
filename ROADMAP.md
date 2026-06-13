@@ -27,11 +27,18 @@ Goal: text appears and **self-corrects as you speak**, like macOS dictation,
 instead of arriving all at once at the end.
 
 - Pipe `pw-record` PCM to the daemon and keep a rolling audio buffer.
+- **VAD (voice activity detection)**: run whisper-server with `--vad` + a silero VAD model
+  so silent stretches are never fed to the model. This is the robust fix for silence
+  hallucinations and for the "missed a quiet sentence at the end of a long mostly-silent
+  recording" case that batch transcription handles poorly (v0.2.1's energy gate only
+  skips wholly-silent recordings).
 - Every ~2-3s, re-transcribe a sliding/growing window so longer context refines
   earlier words (whisper is far more accurate with more context).
 - Maintain a **committed vs tentative** text model; type committed deltas live and
   backspace-correct tentative words as they firm up.
 - Tune chunk/window sizes for the latency-vs-accuracy trade-off.
+- **Smart line breaks**: detect real sentence/paragraph/discussion boundaries and insert
+  newlines deliberately, instead of v0.2.1's blanket newline-collapse.
 - This naturally removes the "can't start while transcribing" limitation, since
   there's no separate batch PROCESSING phase.
 
@@ -48,6 +55,8 @@ overlapping-context rewrite is done well. That's why it's its own release.
 - Colored/custom indicator icons; optional sound cues.
 - Per-app insertion profiles; custom vocabulary / punctuation commands.
 - Model selection (tiny..large) and download helper from config.
+- **Language preferences pane**: pick which Whisper languages to use (e.g. Polish +
+  English), with optional per-session lock for soft/ambiguous audio.
 
 ## Non-goals
 

@@ -35,6 +35,12 @@ class Config:
     silence_window_sec: float = 3.0     # length of the WAV tail analysed each sample
     silence_rms_threshold: float = 0.015  # normalised RMS (0..1) below which = silence
 
+    # Transcript cleanup
+    filter_non_speech: bool = True      # drop whisper non-speech tokens ([Silence], etc.)
+    collapse_newlines: bool = True      # join whisper's per-segment newlines into spaces
+    drop_hallucinations: bool = True    # drop known silence hallucinations ("the end", etc.)
+    skip_silent_recordings: bool = True # skip transcription if no window exceeds speech RMS
+
     # Text insertion
     paste_method: str = "type"          # "type" (ydotool) or "clipboard" (Ctrl+Shift+V)
     key_delay_ms: int = 0               # ydotool inter-key delay; 0 = fastest

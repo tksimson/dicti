@@ -29,6 +29,7 @@ import array
 import logging
 import math
 import os
+import re
 import shutil
 import signal
 import socket
@@ -52,6 +53,36 @@ TMP_WAV = Path("/tmp/dictation-record.wav")
 SAMPLE_RATE = 16000
 BYTES_PER_SAMPLE = 2  # s16 mono
 WAV_HEADER_BYTES = 44
+
+# A segment that is wholly a non-speech annotation, e.g. "[Silence]", "[ Foreign
+# Language ]", "(silence)", "[Birds singing]", "♪ music ♪".
+_NON_SPEECH_SEGMENT_RE = re.compile(r"^\s*[\[(*♪].*[\])*♪]\s*$")
+# A short inline non-speech token; kept short so real parenthetical speech survives.
+_INLINE_NON_SPEECH_RE = re.compile(
+    r"\s*(?:[\[(][^\[\]()]{0,40}[\])]|[♪*][^♪*\n]{0,40}[♪*])\s*"
+)
+
+# Whisper hallucinates these on silent/low-energy audio (trained on YouTube etc.).
+# Only dropped when a whole segment IS one of them — distinctive enough not to be
+# real dictation. "amara.org" subtitle credits are matched as a substring.
+_HALLUCINATION_PHRASES = {
+    "thanks for watching", "thanks for watching everyone", "thanks for watching this video",
+    "thank you for watching", "thank you for watching this video",
+    "the end", "please subscribe", "subscribe", "like and subscribe",
+    "please like and subscribe", "subscribe to my channel",
+    "see you in the next video", "see you next time", "see you next video",
+    "dziękuję za uwagę", "dziękuję za obejrzenie",
+    "napisy stworzone przez społeczność amara.org",
+}
+
+
+def _normalize_phrase(s: str) -> str:
+    s = re.sub(r"^[^\w]+|[^\w]+$", "", s.strip().lower())
+    return re.sub(r"\s+", " ", s)
+
+
+def _is_hallucination(normalized: str) -> bool:
+    return normalized in _HALLUCINATION_PHRASES or "amara.org" in normalized
 
 logging.basicConfig(
     level=logging.INFO,
@@ -228,7 +259,7 @@ class Daemon:
             self._abort_recorder_unlocked()
 
         try:
-            text = self._transcribe()
+            text = self._clean_transcript(self._transcribe())
             if text:
                 self._insert(text)
                 self.notify("done", text[:80], urgency="low")
@@ -264,9 +295,75 @@ class Daemon:
 
     # ---- transcription + insertion ----------------------------------------
 
+    def _clean_transcript(self, text: str) -> str:
+        """Strip whisper's non-speech hallucinations and flatten segment newlines.
+
+        Whisper annotates low-energy/ambiguous audio with bracketed tokens such as
+        "[Silence]", "[ Foreign Language ]", "(silence)", "[Birds singing]", "♪ … ♪".
+        It also emits one ~5s segment per line, which stair-cases in auto-indenting
+        editors. We drop whole-segment annotations, strip short inline ones, and join
+        segments with spaces (configurable)."""
+        if not text:
+            return ""
+        joiner = " " if self.cfg.collapse_newlines else "\n"
+        cleaned = []
+        for seg in text.split("\n"):
+            s = seg.strip()
+            if not s:
+                continue
+            if self.cfg.filter_non_speech:
+                if _NON_SPEECH_SEGMENT_RE.match(s):
+                    continue
+                s = _INLINE_NON_SPEECH_RE.sub(" ", s).strip()
+                if not s:
+                    continue
+            if self.cfg.drop_hallucinations and _is_hallucination(_normalize_phrase(s)):
+                continue
+            cleaned.append(s)
+        result = joiner.join(cleaned)
+        return re.sub(r"[ \t]{2,}", " ", result).strip()
+
+    def _has_speech(self) -> bool:
+        """True if any window of the recording exceeds the speech RMS threshold.
+        Used to skip transcription of silent recordings, where whisper otherwise
+        hallucinates ("Thanks for watching", "The end", …). Downsamples within each
+        window for speed and returns early on the first speech window."""
+        try:
+            size = TMP_WAV.stat().st_size
+        except OSError:
+            return True  # don't block on error
+        window = int(self.cfg.silence_window_sec * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        if window <= 0:
+            return True
+        thr = self.cfg.silence_rms_threshold
+        pos = WAV_HEADER_BYTES
+        try:
+            with TMP_WAV.open("rb") as f:
+                while pos < size:
+                    f.seek(pos)
+                    raw = f.read(window)
+                    pos += window
+                    n = len(raw) - (len(raw) % BYTES_PER_SAMPLE)
+                    if n < BYTES_PER_SAMPLE:
+                        continue
+                    samples = array.array("h")
+                    samples.frombytes(raw[:n])
+                    sub = samples[::8]  # energy gate tolerates downsampling
+                    if not sub:
+                        continue
+                    rms = math.sqrt(sum(s * s for s in sub) / len(sub)) / 32768.0
+                    if rms >= thr:
+                        return True
+        except OSError:
+            return True
+        return False
+
     def _transcribe(self) -> str:
         if not TMP_WAV.exists() or TMP_WAV.stat().st_size < 2000:
             log.warning("Recording too small or missing: %s", TMP_WAV)
+            return ""
+        if self.cfg.skip_silent_recordings and not self._has_speech():
+            log.info("No speech above threshold; skipping transcription (silent recording)")
             return ""
         t0 = time.monotonic()
         with TMP_WAV.open("rb") as f:

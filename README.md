@@ -17,8 +17,9 @@ account, no network. Built and tested on Debian + GNOME (X11).
 - **Universal text insertion** — types the transcript with `ydotool`, so it works
   in plain editors, IDEs and terminals alike (no "paste renders my Markdown" surprise).
   The transcript is also left on the clipboard as a safety net.
-- **Subtle tray indicator** — a top-bar icon shows idle / listening / transcribing.
-  No nagging popups.
+- **Subtle top-bar indicator** — a dedicated GNOME Shell extension shows a single icon
+  (idle / listening / transcribing); left-click toggles, right-click menu. No nagging
+  popups, and no other apps' tray icons dragged in.
 - **Multilingual** — auto language detection (e.g. English + Polish).
 
 ## How it works
@@ -29,17 +30,19 @@ account, no network. Built and tested on Debian + GNOME (X11).
      --HTTP--> whisper-server (Vulkan) --> transcript --ydotool type--> focused window
 ```
 
-Three user services: `whisper-server` (model hot in RAM), `dictation` (the daemon),
-and `dicti-indicator` (the tray icon). State is mirrored to
-`$XDG_RUNTIME_DIR/dictation.state` so the indicator can follow the daemon.
+Two user services — `whisper-server` (model hot in RAM) and `dictation` (the daemon) —
+plus the GNOME Shell extension `dicti@local` for the top-bar indicator. The daemon mirrors
+its state to `$XDG_RUNTIME_DIR/dictation.state` so the indicator can follow it. (On
+non-GNOME desktops, an optional AppIndicator-based `dicti-indicator` service is available
+instead of the extension.)
 
 ## Requirements
 
 - Debian/Ubuntu-family distro (apt). PipeWire for audio (`pw-record`).
 - A Vulkan-capable GPU (an integrated GPU is fine). CPU fallback exists but is ~4-5× slower.
-- GNOME with the AppIndicator extension (installed by the preflight script) for the tray icon.
+- GNOME Shell (for the top-bar indicator extension; tested on GNOME 48).
 - Key packages (installed automatically): `keyd`, `ydotool`, `xclip`, `libnotify-bin`,
-  `python3-gi`, `gir1.2-ayatanaappindicator3-0.1`, plus a Vulkan toolchain.
+  `python3-requests`, plus a Vulkan toolchain.
 
 ## Install
 
@@ -49,11 +52,11 @@ cd dicti
 bash install/install.sh
 ```
 
-The guided installer runs six phases (system packages, keyd remap, build
-whisper.cpp + download/quantize the model, install the three user services,
-ydotool, and the GNOME shortcut). You will be asked to log out/in once after the
-first phase so `input`-group membership takes effect. Each phase is also runnable
-on its own from `install/00..06`.
+The guided installer runs the phases in order (system packages, keyd remap, build
+whisper.cpp + download/quantize the model, the user services, ydotool, the GNOME
+shortcut, and the indicator extension). You will be asked to log out/in once after the
+first phase so `input`-group membership takes effect. Each phase is also runnable on its
+own from `install/00..07`.
 
 If your dictation key isn't a Copilot/AI key, run `sudo evtest` (or `wev` on
 Wayland) to find its `KEY_*` name and edit `keyd/default.conf` accordingly.
@@ -82,7 +85,8 @@ Restart the daemon after editing: `systemctl --user restart dictation`.
 - **Nothing types** — ensure `ydotoold` is running and `YDOTOOL_SOCKET` is set
   (`systemctl --user status ydotool`); you must be in the `input` group (log out/in
   after install).
-- **No tray icon** — enable the AppIndicator GNOME extension once via the Extensions app.
+- **No top-bar icon** — reload GNOME Shell (Alt+F2 → `r` on X11; log out/in on Wayland),
+  then `gnome-extensions enable dicti@local` (or enable "dicti dictation" in the Extensions app).
 - **Live logs** — `journalctl --user -u dictation -u whisper-server -f`.
 
 ## License

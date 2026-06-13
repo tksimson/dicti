@@ -14,6 +14,18 @@ silence_rms_threshold = 0.015      # normalised RMS (0..1); below this = silence
                                    # Raise if a noisy room never auto-stops; lower if it
                                    # stops while you're still (quietly) speaking.
 
+# --- Transcript cleanup ---
+filter_non_speech = true     # drop whisper's non-speech tokens like "[Silence]",
+                             # "[Foreign Language]", "[Birds singing]", "(silence)".
+collapse_newlines = true     # join whisper's ~5s per-segment newlines into spaces, so the
+                             # text flows instead of stair-casing. (Real paragraph/break
+                             # logic comes in a later release.)
+drop_hallucinations = true   # drop whisper's silence hallucinations ("Thanks for watching",
+                             # "The end", subtitle credits, …) when a segment is only that.
+skip_silent_recordings = true  # if no part of the recording exceeds the speech RMS
+                             # threshold (silence_rms_threshold), skip transcription entirely
+                             # instead of letting whisper hallucinate on silence.
+
 # --- Text insertion ---
 paste_method = "type"        # "type" = ydotool types the text (universal; recommended)
                              # "clipboard" = xclip + Ctrl+Shift+V (legacy)

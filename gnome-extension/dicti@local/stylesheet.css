@@ -1,0 +1,4 @@
+/* Red tint for the microphone icon while actively listening. */
+.dicti-listening {
+    color: #e01b24;
+}

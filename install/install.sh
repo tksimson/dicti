@@ -31,7 +31,10 @@ run "Phase 3: whisper-server user service"           bash 03-install-whisper-ser
 run "Phase 4: dictation daemon + indicator"          bash 04-install-daemon.sh
 run "Phase 5a: ydotool user service"                 bash 05-install-ydotool.sh
 run "Phase 5b: GNOME shortcut binding"               bash 06-bind-shortcuts.sh
+run "Phase 7: GNOME Shell indicator extension"       bash 07-install-gnome-extension.sh
 
 echo
-echo "==> Install complete. Tap your dictation key in a focused text field to try it."
+echo "==> Install complete. Reload GNOME Shell (Alt+F2 -> r on X11; log out/in on Wayland)"
+echo "    and enable the indicator: gnome-extensions enable dicti@local"
+echo "    Then tap your dictation key in a focused text field to try it."
 echo "    Logs: journalctl --user -u dictation -u whisper-server -f"
