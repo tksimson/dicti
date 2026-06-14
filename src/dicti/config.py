@@ -28,6 +28,17 @@ class Config:
     whisper_url: str = "http://127.0.0.1:8178/inference"
     language: str = "auto"  # "auto", "en", "pl", ...
 
+    # Dictation mode
+    mode: str = "streaming"  # "streaming" (phrase-by-phrase, appears as you pause)
+    #                          or "batch" (transcribe the whole utterance at STOP)
+
+    # Streaming tuning, only used when mode == "streaming". Each pass re-transcribes the
+    # whole utterance so far (full context = best quality) and appends only the words that
+    # have stabilised across passes. Append-only: text behind the cursor is never rewritten.
+    stream_interval_sec: float = 2.0     # target seconds between transcription passes
+    max_context_sec: float = 60.0        # cap the re-transcribed window; past this the text
+    #                                      so far is committed and a fresh context window starts
+
     # Session limits
     max_record_sec: int = 3600          # hard safety backstop (1 hour)
     silence_timeout_sec: int = 180      # auto-stop after this much continuous silence

@@ -1,17 +1,24 @@
 # dicti
 
-Local, offline live dictation for Linux. Tap a key, talk, tap again, and your words are
-transcribed by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on your own machine
-and typed into whatever window has focus. No cloud, no account, no network.
+Local, offline live dictation for Linux. Tap a key, talk, and your words appear as you
+speak, transcribed by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on your own
+machine and typed into whatever window has focus. No cloud, no account, no network.
 
 I built this because I was used to a good dictation app on the Mac and wanted the same thing
 on Linux. Tested on Debian + GNOME (X11).
 
-> Status: v0.2 (alpha). Works well day to day, rough edges remain. See the [ROADMAP](ROADMAP.md).
+> Status: v0.3 (alpha). Live streaming dictation; works well day to day, rough edges remain.
+> See the [ROADMAP](ROADMAP.md).
 
 ## Features
 
 - Push-to-talk via a global key (the "Copilot"/AI key, or any key you bind).
+- **Live streaming**: text appears as you speak, refined with full context (whisper
+  re-transcribes the whole utterance each pass, so quality matches batch). Append-only, so
+  it never rewrites text behind your cursor. Batch mode is one config line away (`mode =
+  "batch"`).
+- **No silence hallucinations**: a word is only typed once it repeats across passes, so the
+  stock "thanks for watching" guesses on pauses never make it to the screen.
 - Fully offline: whisper.cpp medium model, GPU-accelerated via Vulkan.
 - Long sessions (1-hour cap) with silence auto-stop after a few minutes of real quiet.
 - Universal insertion: types the transcript with `ydotool`, so it works in plain editors,
@@ -26,6 +33,11 @@ on Linux. Tested on Debian + GNOME (X11).
    -> unix socket -> dictation daemon -> pw-record -> /tmp WAV
    -> HTTP -> whisper-server (Vulkan) -> transcript -> ydotool type -> focused window
 ```
+
+In streaming mode the daemon re-transcribes the whole utterance so far every ~2s (whisper
+always has full context, so quality matches batch) and types only the words that have
+stabilised across passes. It is append-only, so text already typed is never rewritten.
+Requiring a word to repeat across passes also filters out silence hallucinations.
 
 Two user services (`whisper-server`, `dictation`) plus the GNOME Shell extension
 `dicti@local` for the indicator. The daemon mirrors its state to
@@ -64,9 +76,14 @@ find its `KEY_*` name and edit `keyd/default.conf`.
 ## Configuration
 
 Copy and edit `~/.config/dicti/config.toml` (the installer seeds one from
-[`config/config.toml.example`](config/config.toml.example)): `silence_timeout_sec`,
-`max_record_sec`, `language`, `paste_method`, the silence thresholds, and the transcript
-cleanup flags. Restart after editing: `systemctl --user restart dictation`.
+[`config/config.toml.example`](config/config.toml.example)): `mode` (`streaming` or
+`batch`) and the streaming phrase tuning, `silence_timeout_sec`, `max_record_sec`,
+`language`, `paste_method`, the silence thresholds, and the transcript cleanup flags.
+Restart after editing: `systemctl --user restart dictation`.
+
+Tip: whisper transcribes one language per pass. `language = "auto"` works well for mixed
+use now that streaming keeps full context, but if a quiet or ambiguous voice gets detected
+wrong, pin it, e.g. `language = "pl"`.
 
 ## Troubleshooting
 

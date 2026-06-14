@@ -26,6 +26,7 @@ Logs to journal (stdout/stderr) when run as a systemd user service.
 """
 
 import array
+import io
 import logging
 import math
 import os
@@ -36,6 +37,7 @@ import socket
 import subprocess
 import threading
 import time
+import wave
 from pathlib import Path
 
 import requests
@@ -84,6 +86,17 @@ def _normalize_phrase(s: str) -> str:
 def _is_hallucination(normalized: str) -> bool:
     return normalized in _HALLUCINATION_PHRASES or "amara.org" in normalized
 
+
+def _common_prefix(a: list[str], b: list[str]) -> list[str]:
+    """Longest leading run of words shared by two word lists. Used to find the text that
+    has stabilised across two consecutive re-transcription passes (safe to commit)."""
+    out = []
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        out.append(x)
+    return out
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -108,6 +121,14 @@ class Daemon:
         self.silence_thread: threading.Thread | None = None
         self.silence_stop = threading.Event()
         self.processing_started_at: float | None = None
+        # Streaming session state (mode == "streaming"). Guarded by _flush_lock so
+        # phrase flushes and the final stop flush never overlap or double-type.
+        self._flush_lock = threading.Lock()
+        self._anchor_byte = 0          # start of the current re-transcribed context window
+        self._displayed_words: list[str] = []  # words already typed this window
+        self._typed_any = False        # have we typed anything this session?
+        self._session_text = ""        # full text typed this session (for clipboard)
+        self._last_progress = 0.0      # monotonic time of last committed word (auto-stop)
         self._write_state()
 
     # ---- state -------------------------------------------------------------
@@ -183,16 +204,31 @@ class Daemon:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            # Hold IDLE until capture is actually live, so the red indicator never precedes
+            # real recording (otherwise a fast speaker loses their first word). ~50ms typ.
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                if self._data_end() > 1000:
+                    break
+                time.sleep(0.01)
             self._set_state(State.LISTENING)
             self.timeout_timer = threading.Timer(self.cfg.max_record_sec, self._safety_stop)
             self.timeout_timer.daemon = True
             self.timeout_timer.start()
             self.silence_stop.clear()
-            self.silence_thread = threading.Thread(target=self._monitor_silence, daemon=True)
+            if self.cfg.mode == "streaming":
+                self._anchor_byte = 0
+                self._displayed_words = []
+                self._typed_any = False
+                self._session_text = ""
+                monitor = self._stream_loop
+            else:
+                monitor = self._monitor_silence
+            self.silence_thread = threading.Thread(target=monitor, daemon=True)
             self.silence_thread.start()
         # No "listening" popup by design, the tray indicator shows the state.
-        log.info("Listening (max %ds, auto-stop after %ds silence)",
-                 self.cfg.max_record_sec, self.cfg.silence_timeout_sec)
+        log.info("Listening (mode=%s, max %ds, auto-stop after %ds silence)",
+                 self.cfg.mode, self.cfg.max_record_sec, self.cfg.silence_timeout_sec)
 
     def _safety_stop(self) -> None:
         log.info("Safety timeout fired (%ds)", self.cfg.max_record_sec)
@@ -245,6 +281,109 @@ class Daemon:
         mean_sq = sum(s * s for s in samples) / len(samples)
         return math.sqrt(mean_sq) / 32768.0
 
+    # ---- streaming -------------------------------------------------------
+
+    def _data_end(self) -> int:
+        """Bytes of PCM data currently in TMP_WAV (file size minus header)."""
+        try:
+            return max(0, TMP_WAV.stat().st_size - WAV_HEADER_BYTES)
+        except OSError:
+            return 0
+
+    def _stream_loop(self) -> None:
+        """Streaming monitor (mode == "streaming"). Each pass re-transcribes the WHOLE
+        utterance so far (from the current anchor to now), so whisper always has full
+        context = batch-grade quality, and appends only the words that have *stabilised*
+        (agree with the previous pass). Append-only: text behind the cursor is never
+        rewritten, so it can't be corrupted if focus moves.
+
+        No server-side VAD: VAD trims quiet speech onsets, eating the first word after a
+        pause. Instead, the stabilise-across-passes rule rejects silence hallucinations
+        (they vary pass to pass, so never form a stable prefix) and the `_clean_transcript`
+        blocklist drops the stock ones, while every real onset reaches whisper intact.
+
+        When the window grows past max_context_sec the text so far is committed wholesale
+        and a fresh context window starts, to bound the per-pass cost. The session
+        auto-stops after silence_timeout_sec with no newly committed words."""
+        max_ctx_bytes = int(self.cfg.max_context_sec * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        min_window = SAMPLE_RATE * BYTES_PER_SAMPLE // 2  # need ~0.5s before a first pass
+        prev_words: list[str] = []
+        self._last_progress = time.monotonic()
+        while not self.silence_stop.is_set():
+            t0 = time.monotonic()
+            anchor = self._anchor_byte
+            end = self._data_end()
+            if end - anchor >= min_window:
+                pcm = self._read_pcm(anchor, end)
+                words = self._clean_transcript(self._transcribe_pcm(pcm)).split()
+                if self.silence_stop.is_set():
+                    return  # a STOP raced in; let the final flush be authoritative
+                with self._flush_lock:
+                    if end - anchor >= max_ctx_bytes:
+                        # window full: commit everything and re-anchor for bounded cost
+                        self._emit_words(words[len(self._displayed_words):])
+                        self._anchor_byte = end
+                        self._displayed_words = []
+                        prev_words = []
+                    else:
+                        stable = _common_prefix(words, prev_words)
+                        if len(stable) > len(self._displayed_words):
+                            self._emit_words(stable[len(self._displayed_words):])
+                            self._displayed_words = stable
+                        prev_words = words
+            if time.monotonic() - self._last_progress >= self.cfg.silence_timeout_sec:
+                log.info("Silence auto-stop (%ds without new committed words)",
+                         self.cfg.silence_timeout_sec)
+                self.stop_and_transcribe()
+                return
+            wait = self.cfg.stream_interval_sec - (time.monotonic() - t0)
+            if self.silence_stop.wait(max(0.1, wait)):
+                return
+
+    def _emit_words(self, new_words: list[str]) -> None:
+        """Type a list of newly-stable words, append-only, space-joined. Caller holds
+        _flush_lock. Reconstructs spacing and keeps the session text/clipboard in sync."""
+        if not new_words:
+            return
+        piece = (" " if self._typed_any else "") + " ".join(new_words)
+        self._type_text(piece)
+        self._typed_any = True
+        self._session_text += piece
+        self._last_progress = time.monotonic()  # commit progress, drives silence auto-stop
+        if self.cfg.keep_clipboard:
+            self._copy_to_clipboard(self._session_text)
+
+    def _final_flush(self) -> None:
+        """At STOP: re-transcribe the final context window once more (full context = best
+        quality) and type whatever the stream loop hadn't committed yet (the tail)."""
+        pcm = self._read_pcm(self._anchor_byte, self._data_end())
+        words = self._clean_transcript(self._transcribe_pcm(pcm)).split() if pcm else []
+        with self._flush_lock:
+            if len(words) > len(self._displayed_words):
+                self._emit_words(words[len(self._displayed_words):])
+                self._displayed_words = words
+
+    def _read_pcm(self, start: int, end: int) -> bytes:
+        """Read raw PCM bytes [start:end] (offsets into the data, header excluded)."""
+        end -= (end - start) % BYTES_PER_SAMPLE  # keep int16-aligned
+        if end <= start:
+            return b""
+        try:
+            with TMP_WAV.open("rb") as f:
+                f.seek(WAV_HEADER_BYTES + start)
+                return f.read(end - start)
+        except OSError:
+            return b""
+
+    def _wav_bytes(self, pcm: bytes) -> bytes:
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(BYTES_PER_SAMPLE)
+            w.setframerate(SAMPLE_RATE)
+            w.writeframes(pcm)
+        return buf.getvalue()
+
     def stop_and_transcribe(self) -> None:
         with self.lock:
             if self.state == State.PROCESSING:
@@ -256,15 +395,23 @@ class Daemon:
                 return
             self._set_state(State.PROCESSING)
             self.processing_started_at = time.monotonic()
+            streaming = self.cfg.mode == "streaming"
             self._abort_recorder_unlocked()
 
         try:
-            text = self._clean_transcript(self._transcribe())
-            if text:
-                self._insert(text)
-                self.notify("done", text[:80], urgency="low")
+            if streaming:
+                self._final_flush()
+                if self._typed_any:
+                    self.notify("done", self._session_text[:80], urgency="low")
+                else:
+                    self.notify("empty transcript", "", urgency="normal")
             else:
-                self.notify("empty transcript", "", urgency="normal")
+                text = self._clean_transcript(self._transcribe())
+                if text:
+                    self._insert(text)
+                    self.notify("done", text[:80], urgency="low")
+                else:
+                    self.notify("empty transcript", "", urgency="normal")
         except Exception as e:
             log.exception("Transcribe/insert failed")
             self.notify("dictation error", str(e)[:80], urgency="critical")
@@ -365,18 +512,24 @@ class Daemon:
         if self.cfg.skip_silent_recordings and not self._has_speech():
             log.info("No speech above threshold; skipping transcription (silent recording)")
             return ""
-        t0 = time.monotonic()
         with TMP_WAV.open("rb") as f:
-            r = requests.post(
-                self.cfg.whisper_url,
-                files={"file": ("audio.wav", f, "audio/wav")},
-                data={"language": self.cfg.language, "response_format": "json"},
-                timeout=120,
-            )
+            return self._post_inference(f)
+
+    def _transcribe_pcm(self, pcm: bytes) -> str:
+        """Transcribe a raw PCM buffer (streaming segment) by wrapping it in a WAV."""
+        return self._post_inference(io.BytesIO(self._wav_bytes(pcm)))
+
+    def _post_inference(self, fileobj) -> str:
+        t0 = time.monotonic()
+        r = requests.post(
+            self.cfg.whisper_url,
+            files={"file": ("audio.wav", fileobj, "audio/wav")},
+            data={"language": self.cfg.language, "response_format": "json"},
+            timeout=120,
+        )
         r.raise_for_status()
         elapsed = time.monotonic() - t0
-        data = r.json()
-        text = (data.get("text") or "").strip()
+        text = (r.json().get("text") or "").strip()
         log.info("Inference %.2fs -> %d chars: %r", elapsed, len(text), text[:120])
         return text
 

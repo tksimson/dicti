@@ -21,32 +21,52 @@ The everyday-pain release. All shipped:
   method and silence thresholds.
 - **Repo**, became the public MIT project (ported from a private prototype).
 
-## v0.3, Mac-like live streaming (next, biggest piece)
+## v0.3, Live streaming with VAD (shipped)
 
-Goal: text appears and **self-corrects as you speak**, like macOS dictation,
-instead of arriving all at once at the end.
+Goal met: text appears **as you speak** while keeping batch-grade quality.
 
-- Pipe `pw-record` PCM to the daemon and keep a rolling audio buffer.
-- **VAD (voice activity detection)**: run whisper-server with `--vad` + a silero VAD model
-  so silent stretches are never fed to the model. This is the robust fix for silence
-  hallucinations and for the "missed a quiet sentence at the end of a long mostly-silent
-  recording" case that batch transcription handles poorly (v0.2.1's energy gate only
-  skips wholly-silent recordings).
-- Every ~2-3s, re-transcribe a sliding/growing window so longer context refines
-  earlier words (whisper is far more accurate with more context).
-- Maintain a **committed vs tentative** text model; type committed deltas live and
-  backspace-correct tentative words as they firm up.
-- Tune chunk/window sizes for the latency-vs-accuracy trade-off.
-- **Smart line breaks**: detect real sentence/paragraph/discussion boundaries and insert
-  newlines deliberately, instead of v0.2.1's blanket newline-collapse.
-- This naturally removes the "can't start while transcribing" limitation, since
-  there's no separate batch PROCESSING phase.
+- **Growing-window streaming**, each pass (every `stream_interval_sec`) re-transcribes the
+  whole utterance so far, so whisper always has full context (= batch quality), and types
+  only the words that have **stabilised** across passes. **Append-only**: it never
+  backspaces, so it can't corrupt text behind the cursor if focus moves. `max_context_sec`
+  bounds the per-pass cost on long dictations.
+- **No VAD; stability filters hallucinations**, a word is typed only once it agrees across
+  two passes, so silence hallucinations (which vary pass to pass) never commit, and the
+  blocklist drops the stock ones. Server-side VAD was tried and reverted: it trimmed quiet
+  speech onsets, eating the first word after each pause on a low-output mic.
+- **Capture-live gate**, the red indicator waits until pw-record is actually recording, so a
+  fast speaker doesn't lose their first word.
+- **Batch mode kept** as a one-line config fallback (`mode = "batch"`).
 
-Risk: per-chunk accuracy is lower than whole-file batch unless the
-overlapping-context rewrite is done well. That's why it's its own release.
+Found along the way: chunked streaming destroyed whisper's context and tanked quality
+(reverted to the growing-window design above); auto language-detect is most reliable with
+full context, so the window matters for mixed-language use too.
+
+## v0.4, Word-level refinement & polish (next)
+
+Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
+
+- **Language picker in the indicator menu**: a small preferences popup from the top-bar
+  indicator to choose the Whisper language (auto / pl / en / ...) without editing the config
+  and restarting, with an optional per-session lock for soft/ambiguous audio.
+- **Committed vs tentative** text: keep append-only for stable words, but **backspace-correct
+  the still-tentative tail** as it firms up, for lower-latency display. Gate carefully on X11
+  focus (ydotool types into the focused window; pause insertion when focus changes) so
+  corrections never eat the wrong text. This is the risky bit v0.3 intentionally skipped.
+- **Smarter window anchoring**: anchor on real utterance boundaries instead of the
+  time-based `max_context_sec` re-anchor (e.g. silero VAD used only to find boundaries, never
+  to trim the audio sent to whisper, so onsets stay intact).
+- **Smart line breaks**: detect real sentence/paragraph boundaries and insert newlines
+  deliberately, instead of v0.2.1's blanket newline-collapse.
 
 ## Future, Reach & polish
 
+- **Capture-to-file mode**: hold Shift when starting/stopping a recording to send the
+  transcript to a **new file** instead of typing into the focused window, with a save
+  dialog (e.g. `zenity --file-selection --save`) on stop, to spin up a fresh `.md`/`.txt`
+  on the fly. Clean because it's just a different text *sink* (file vs keystrokes); the
+  wrinkle is plumbing the Shift modifier from keyd/GNOME through the socket as a flag
+  (e.g. `START_NEWFILE`).
 - **Wayland** insertion and clipboard (`wtype` / `wl-copy`) as alternatives to
   `ydotool`/`xclip`; detect session type.
 - **Non-PipeWire** audio fallback (ALSA/`arecord`).

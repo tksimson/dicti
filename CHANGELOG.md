@@ -3,6 +3,46 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [0.3.0] - 2026-06-14
+
+Live streaming dictation that keeps batch-grade quality. Text appears as you speak,
+refining with full context, instead of arriving all at once at STOP.
+
+### Added
+- **Streaming mode** (`mode = "streaming"`, now the default): the loop (`_stream_loop`)
+  re-transcribes the *whole utterance so far* every `stream_interval_sec` (default 2.0s), so
+  whisper always has full context (= batch quality), and types only the words that have
+  **stabilised** across consecutive passes (`_common_prefix`). Append-only: it never
+  backspaces or rewrites text behind the cursor, so moving focus mid-dictation can't corrupt
+  a document. `max_context_sec` caps the window so a long dictation doesn't slow each pass
+  without bound; `_final_flush` does one last full-context pass at STOP for the tail. The
+  silence auto-stop fires after `silence_timeout_sec` with no newly committed words.
+- **Silence hallucinations** are handled without VAD: a word must agree across two passes
+  before it is typed, and stock silence hallucinations vary pass to pass so they never form
+  a stable prefix (the `_clean_transcript` blocklist drops the fixed ones). This was chosen
+  over server-side VAD, which was tried and reverted because it trims quiet speech onsets,
+  eating the first word after every pause on a low-output mic.
+- **Capture-live gate**: START holds the red indicator until pw-record is actually capturing
+  (~50ms), so a fast speaker doesn't lose their first word into the device warm-up.
+- **Batch mode kept as a fallback** (`mode = "batch"`): the v0.2 whole-utterance path is
+  unchanged and one config line away.
+- `tests/` directory with stdlib unit tests (`tests/test_streaming.py`): common-prefix
+  stability, growing-window append-only, displayed-never-shrinks, final-flush tail, WAV
+  round-trip.
+
+### Changed
+- Whisper HTTP POST factored into `_post_inference`, shared by batch (`_transcribe`, whole
+  WAV file) and streaming (`_transcribe_pcm`, an in-memory WAV built from a PCM window).
+- State stays `LISTENING` throughout a streaming session (typing happens live); only the
+  final pass at STOP briefly shows `PROCESSING`. No tray/extension change needed.
+
+### Notes
+- Whisper transcribes one language per pass; auto-detect is most reliable with full context
+  (which this design restores). Keep `language = "auto"` for mixed use, or pin it for a
+  single language. A language picker in the indicator menu, plus word-level in-place
+  correction (backspacing) and smart line breaks, are deferred to v0.4. See
+  `docs/v0.3-streaming.md`.
+
 ## [0.2.1] - 2026-06-13
 
 Polish pass after first real-world use.
