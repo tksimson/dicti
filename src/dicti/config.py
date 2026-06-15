@@ -53,8 +53,8 @@ class Config:
     skip_silent_recordings: bool = True # skip transcription if no window exceeds speech RMS
 
     # Text insertion
-    paste_method: str = "type"          # "type" (ydotool) or "clipboard" (Ctrl+Shift+V)
-    key_delay_ms: int = 0               # ydotool inter-key delay; 0 = fastest
+    paste_method: str = "type"          # "type" or "clipboard" (Ctrl+Shift+V)
+    key_delay_ms: int = 0               # inter-key delay for typing; 0 = fastest
     keep_clipboard: bool = True         # also leave transcript on clipboard (safety net)
 
     @classmethod

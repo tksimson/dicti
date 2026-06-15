@@ -33,6 +33,7 @@ apt install -y \
   python3-pip \
   python3-requests \
   xclip \
+  x11-utils \
   netcat-openbsd \
   cmake \
   git \

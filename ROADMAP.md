@@ -30,17 +30,20 @@ Goal met: text appears **as you speak** while keeping batch-grade quality.
   only the words that have **stabilised** across passes. **Append-only**: it never
   backspaces, so it can't corrupt text behind the cursor if focus moves. `max_context_sec`
   bounds the per-pass cost on long dictations.
-- **No VAD; stability filters hallucinations**, a word is typed only once it agrees across
-  two passes, so silence hallucinations (which vary pass to pass) never commit, and the
-  blocklist drops the stock ones. Server-side VAD was tried and reverted: it trimmed quiet
-  speech onsets, eating the first word after each pause on a low-output mic.
+- **Server-side VAD, tuned for onsets** (`--vad-threshold 0.25 --vad-speech-pad-ms 500`),
+  rejects silence (no hallucinations, no runaway session) while the generous padding keeps
+  the first word after a pause, which a tighter VAD trims on a low-output mic. The
+  stabilise-across-passes rule is a second line of defence.
+- **Non-ASCII insertion**, ASCII is typed via ydotool; text with Polish/accented characters
+  is inserted byte-exact via the clipboard (ydotool 1.x cannot type non-ASCII keycodes).
 - **Capture-live gate**, the red indicator waits until pw-record is actually recording, so a
   fast speaker doesn't lose their first word.
 - **Batch mode kept** as a one-line config fallback (`mode = "batch"`).
 
 Found along the way: chunked streaming destroyed whisper's context and tanked quality
-(reverted to the growing-window design above); auto language-detect is most reliable with
-full context, so the window matters for mixed-language use too.
+(reverted to the growing-window design above); a tight VAD trims quiet speech onsets while
+no VAD lets silence hallucinations run away (settled on a loosely-padded VAD); and xdotool's
+Unicode typing can deadlock X (use clipboard for non-ASCII instead).
 
 ## v0.4, Word-level refinement & polish (next)
 

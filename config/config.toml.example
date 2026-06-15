@@ -41,7 +41,12 @@ skip_silent_recordings = true  # if no part of the recording exceeds the speech 
                              # instead of letting whisper hallucinate on silence.
 
 # --- Text insertion ---
-paste_method = "type"        # "type" = ydotool types the text (universal; recommended)
+paste_method = "type"        # "type" = type the text as keystrokes (universal; recommended)
                              # "clipboard" = xclip + Ctrl+Shift+V (legacy)
+                             # Note: with "type", ASCII is typed via ydotool but text with
+                             # non-ASCII (e.g. Polish ąęóśżźćń) is inserted via clipboard +
+                             # paste, since ydotool 1.x cannot type non-ASCII keys. The paste
+                             # shortcut is auto-picked from the focused window: Ctrl+Shift+V
+                             # for terminals, Ctrl+V elsewhere (needs xprop / x11-utils).
 key_delay_ms = 0             # inter-key delay for "type" method; 0 = fastest
 keep_clipboard = true        # also leave the transcript on the clipboard as a safety net

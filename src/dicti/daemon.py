@@ -87,6 +87,19 @@ def _is_hallucination(normalized: str) -> bool:
     return normalized in _HALLUCINATION_PHRASES or "amara.org" in normalized
 
 
+# Terminals paste with Ctrl+Shift+V (Ctrl+V is "literal next char" there); almost every
+# other app pastes with Ctrl+V. We pick per focused-window WM_CLASS. Match on substrings so
+# variants are covered (gnome-terminal-server, xfce4-terminal, org.gnome.Console/kgx, ...).
+_TERMINAL_WM_HINTS = (
+    "terminal", "konsole", "xterm", "rxvt", "alacritty", "kitty", "wezterm",
+    "foot", "tilix", "guake", "yakuake", "terminator", "termite", "sakura",
+    "org.gnome.console", "kgx", "io.elementary.terminal", "contour", "st-256color",
+)
+# ydotool key sequences. KEY_LEFTCTRL=29, KEY_LEFTSHIFT=42, KEY_V=47.
+_KEYS_CTRL_V = ["29:1", "47:1", "47:0", "29:0"]
+_KEYS_CTRL_SHIFT_V = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+
+
 def _common_prefix(a: list[str], b: list[str]) -> list[str]:
     """Longest leading run of words shared by two word lists. Used to find the text that
     has stabilised across two consecutive re-transcription passes (safe to commit)."""
@@ -543,14 +556,19 @@ class Daemon:
         self._type_text(text)
 
     def _type_text(self, text: str) -> None:
-        # --file - reads stdin with escapes disabled, so arbitrary text (incl.
-        # newlines and UTF-8 like ąęłóśżźćń) is typed literally.
-        subprocess.run(
-            ["ydotool", "type", "--key-delay", str(self.cfg.key_delay_ms), "--file", "-"],
-            input=text.encode("utf-8"),
-            check=True,
-            timeout=60,
-        )
+        """Insert text. ydotool types ASCII reliably and universally, but ydotool 1.x
+        injects raw US-layout keycodes and silently drops anything off that layout (e.g.
+        Polish ąęóśżźćń). So non-ASCII text is inserted byte-exact via the clipboard + a
+        paste keystroke instead. (xdotool would type Unicode, but its live keysym remapping
+        can deadlock the X server, it froze this machine, so it is not used.)"""
+        if text.isascii():
+            subprocess.run(
+                ["ydotool", "type", "--key-delay", str(self.cfg.key_delay_ms), "--file", "-"],
+                input=text.encode("utf-8"),
+                check=True, timeout=60,
+            )
+        else:
+            self._paste_via_clipboard(text)
 
     def _copy_to_clipboard(self, text: str) -> None:
         try:
@@ -565,12 +583,26 @@ class Daemon:
 
     def _paste_via_clipboard(self, text: str) -> None:
         self._copy_to_clipboard(text)
-        # Ctrl+Shift+V via ydotool. KEY_LEFTCTRL=29, KEY_LEFTSHIFT=42, KEY_V=47.
-        subprocess.run(
-            ["ydotool", "key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"],
-            check=True,
-            timeout=2,
-        )
+        time.sleep(0.05)  # let the clipboard settle before pasting
+        keys = _KEYS_CTRL_SHIFT_V if self._active_window_is_terminal() else _KEYS_CTRL_V
+        subprocess.run(["ydotool", "key", *keys], check=True, timeout=2)
+        time.sleep(0.1)  # let the app read the clipboard before anything overwrites it
+
+    def _active_window_is_terminal(self) -> bool:
+        """True if the focused window looks like a terminal (so paste = Ctrl+Shift+V).
+        Reads WM_CLASS via xprop (a harmless query, never remaps the keymap). On any
+        failure assume a normal app (Ctrl+V), which is correct for the large majority."""
+        try:
+            root = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+                                  capture_output=True, text=True, timeout=1).stdout
+            wid = root.strip().split()[-1]
+            if not wid.startswith("0x"):
+                return False
+            out = subprocess.run(["xprop", "-id", wid, "WM_CLASS"],
+                                 capture_output=True, text=True, timeout=1).stdout.lower()
+        except Exception:
+            return False
+        return any(hint in out for hint in _TERMINAL_WM_HINTS)
 
     # ---- startup checks ----------------------------------------------------
 

@@ -15,7 +15,16 @@ ExecStart=%h/opt/whisper.cpp/build/bin/whisper-server \
   --port 8178 \
   --threads 4 \
   --suppress-nst \
-  --inference-path /inference
+  --inference-path /inference \
+  --vad \
+  --vad-model %h/opt/whisper.cpp/models/ggml-silero-v5.1.2.bin \
+  --vad-threshold 0.25 \
+  --vad-min-speech-duration-ms 0 \
+  --vad-min-silence-duration-ms 100 \
+  --vad-speech-pad-ms 500
+# VAD drops silence so the streaming daemon never transcribes (and hallucinates on) it.
+# threshold 0.25 + 500ms speech padding are deliberately generous: a tighter VAD trims quiet
+# speech ONSETS, eating the first word after a pause on a low-output mic. See docs/v0.3-streaming.md.
 Restart=on-failure
 RestartSec=2
 StartLimitBurst=5

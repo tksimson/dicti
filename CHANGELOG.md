@@ -3,6 +3,24 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [0.3.1] - 2026-06-15
+
+### Fixed
+- **Silence no longer hallucinates or runs away.** Server-side VAD is back (it had been
+  removed in 0.3.0), now tuned for onset retention: `--vad-threshold 0.25`,
+  `--vad-speech-pad-ms 500`, `--vad-min-speech-duration-ms 0`. On a low-output mic this
+  both rejects silence (no "Thank you for watching" / random-language hallucinations, which
+  could otherwise commit on sustained silence, defeat the auto-stop and run the session
+  away) and keeps the first word after a pause (a tighter VAD trims quiet onsets).
+- **Non-ASCII characters now insert** (Polish ąęóśżźćń, etc.) without typing them. ydotool
+  1.x injects raw US-layout keycodes and silently drops off-layout characters. ASCII is
+  still typed via ydotool; text containing non-ASCII is inserted byte-exact via the
+  clipboard + a paste keystroke. The paste shortcut is auto-selected from the focused
+  window's WM_CLASS (via `xprop`): Ctrl+Shift+V for terminals, Ctrl+V everywhere else, so it
+  works in normal apps like GNOME Text Editor (which ignores Ctrl+Shift+V) as well as
+  terminals. (xdotool was evaluated and rejected: its live keysym remapping to type Unicode
+  deadlocked the X server.)
+
 ## [0.3.0] - 2026-06-14
 
 Live streaming dictation that keeps batch-grade quality. Text appears as you speak,

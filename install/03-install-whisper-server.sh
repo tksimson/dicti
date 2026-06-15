@@ -21,8 +21,11 @@ echo "==> Installed $DST"
 # Sanity: required files present
 BIN="$HOME/opt/whisper.cpp/build/bin/whisper-server"
 MODEL="$HOME/opt/whisper.cpp/models/ggml-medium-q5_0.bin"
+VAD_MODEL="$HOME/opt/whisper.cpp/models/ggml-silero-v5.1.2.bin"
 [[ -x "$BIN" ]] || { echo "Missing: $BIN  (run 02-build-whisper.sh first)"; exit 1; }
 [[ -f "$MODEL" ]] || { echo "Missing: $MODEL  (run 02-build-whisper.sh first)"; exit 1; }
+# Streaming runs the server with --vad; the service references this model.
+[[ -f "$VAD_MODEL" ]] || { echo "Missing VAD model: $VAD_MODEL  (run 02-build-whisper.sh first)"; exit 1; }
 
 systemctl --user daemon-reload
 systemctl --user enable whisper-server.service

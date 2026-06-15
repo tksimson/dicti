@@ -13,6 +13,7 @@ fi
 REPO_DIR="$HOME/opt/whisper.cpp"
 MODEL_BASE="ggml-medium.bin"
 MODEL_QUANT="ggml-medium-q5_0.bin"
+VAD_MODEL="ggml-silero-v5.1.2.bin"   # silero VAD; streaming runs whisper-server with --vad
 
 mkdir -p "$HOME/opt"
 
@@ -60,7 +61,14 @@ else
   echo "    already present"
 fi
 
-ls -lh models/ggml-medium*
+echo "==> Fetching VAD model $VAD_MODEL if missing (silero, ~0.9MB)"
+if [[ ! -f "models/$VAD_MODEL" ]]; then
+  bash ./models/download-vad-model.sh silero-v5.1.2
+else
+  echo "    already present"
+fi
+
+ls -lh models/ggml-medium* "models/$VAD_MODEL"
 
 echo
 echo "==> Smoke test: Vulkan whisper-cli on bundled JFK sample"

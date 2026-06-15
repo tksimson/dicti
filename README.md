@@ -17,8 +17,9 @@ on Linux. Tested on Debian + GNOME (X11).
   re-transcribes the whole utterance each pass, so quality matches batch). Append-only, so
   it never rewrites text behind your cursor. Batch mode is one config line away (`mode =
   "batch"`).
-- **No silence hallucinations**: a word is only typed once it repeats across passes, so the
-  stock "thanks for watching" guesses on pauses never make it to the screen.
+- **No silence hallucinations**: whisper-server runs with silero VAD (padded so it doesn't
+  clip the first word), and a word must also repeat across passes before it's typed, so the
+  stock "thanks for watching" guesses on pauses never reach the screen.
 - Fully offline: whisper.cpp medium model, GPU-accelerated via Vulkan.
 - Long sessions (1-hour cap) with silence auto-stop after a few minutes of real quiet.
 - Universal insertion: types the transcript with `ydotool`, so it works in plain editors,
@@ -37,7 +38,8 @@ on Linux. Tested on Debian + GNOME (X11).
 In streaming mode the daemon re-transcribes the whole utterance so far every ~2s (whisper
 always has full context, so quality matches batch) and types only the words that have
 stabilised across passes. It is append-only, so text already typed is never rewritten.
-Requiring a word to repeat across passes also filters out silence hallucinations.
+whisper-server's VAD drops silence inside the window (padded so quiet onsets survive), and
+the repeat-across-passes rule is a second filter against hallucinations.
 
 Two user services (`whisper-server`, `dictation`) plus the GNOME Shell extension
 `dicti@local` for the indicator. The daemon mirrors its state to
@@ -48,6 +50,9 @@ Two user services (`whisper-server`, `dictation`) plus the GNOME Shell extension
 - Debian/Ubuntu-family distro (apt), PipeWire audio (`pw-record`).
 - A Vulkan-capable GPU (integrated is fine). CPU fallback works but is ~4-5x slower.
 - GNOME Shell (tested on 48) for the indicator extension.
+- `xclip` and `xprop` (x11-utils): used to insert accented/non-ASCII characters like Polish
+  ąęóśżźćń via a paste (ydotool 1.x can only type ASCII keycodes), choosing Ctrl+V or
+  Ctrl+Shift+V based on the focused app. The installer pulls them in.
 
 ## Install
 
