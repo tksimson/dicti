@@ -70,8 +70,10 @@ Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
   on the fly. Clean because it's just a different text *sink* (file vs keystrokes); the
   wrinkle is plumbing the Shift modifier from keyd/GNOME through the socket as a flag
   (e.g. `START_NEWFILE`).
-- **Wayland** insertion and clipboard (`wtype` / `wl-copy`) as alternatives to
-  `ydotool`/`xclip`; detect session type.
+- **Insertion backends** (spec 0001, v1 shipped): pluggable `clipboard` (X11 + Wayland via
+  `wl-clipboard`) / `wtype` (wlroots) / `ydotool`. Next: validate on real Wayland/wlroots
+  hardware, then the **IBus engine** (spec 0002) as the premium, paste-shortcut-free path,
+  gated on zero-config activation + transparent passthrough.
 - **Non-PipeWire** audio fallback (ALSA/`arecord`).
 - **Non-systemd** init support; packaging as **pipx**, **.deb**, and **AUR**.
 - **Other desktops** (KDE/Plasma indicator, generic tray).

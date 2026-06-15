@@ -1,6 +1,10 @@
 # Spec 0001: Text insertion architecture
 
-- **Status:** ACCEPTED (interview resolved 2026-06-15)
+- **Status:** ACCEPTED, v1 IMPLEMENTED (2026-06-15). `src/dicti/insert.py` (backends +
+  detection), config (`insert_backend`, `paste_keys`, `preserve_clipboard`), `wl-clipboard`
+  for Wayland, `wtype` backend for wlroots, clipboard save/restore. Tests in
+  `tests/test_insert.py`. Not yet validated on real Wayland/wlroots hardware. v1.1 = IBus
+  (spec 0002).
 - **Date:** 2026-06-15
 - **Supersedes:** the ad-hoc insertion logic in `daemon.py` (`_type_text` / `_paste_via_clipboard`)
 - **Related:** [0002 IBus engine](0002-ibus-engine.md)

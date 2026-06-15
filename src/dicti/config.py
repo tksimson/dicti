@@ -52,10 +52,14 @@ class Config:
     drop_hallucinations: bool = True    # drop known silence hallucinations ("the end", etc.)
     skip_silent_recordings: bool = True # skip transcription if no window exceeds speech RMS
 
-    # Text insertion
-    paste_method: str = "type"          # "type" or "clipboard" (Ctrl+Shift+V)
+    # Text insertion (see specs/0001-text-insertion.md)
+    insert_backend: str = "auto"        # "auto" | "clipboard" | "wtype" | "ydotool" | "ibus".
+    #                                     auto: wtype on wlroots Wayland, else clipboard.
+    paste_keys: str = "auto"            # paste shortcut for non-ASCII: "auto" (terminals get
+    #                                     ctrl+shift+v, else ctrl+v) | "ctrl+v" | "ctrl+shift+v"
+    preserve_clipboard: bool = True     # restore the user's clipboard after a paste; if false,
+    #                                     leave the transcript on the clipboard as a safety net
     key_delay_ms: int = 0               # inter-key delay for typing; 0 = fastest
-    keep_clipboard: bool = True         # also leave transcript on clipboard (safety net)
 
     @classmethod
     def load(cls) -> "Config":

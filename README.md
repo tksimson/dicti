@@ -50,9 +50,18 @@ Two user services (`whisper-server`, `dictation`) plus the GNOME Shell extension
 - Debian/Ubuntu-family distro (apt), PipeWire audio (`pw-record`).
 - A Vulkan-capable GPU (integrated is fine). CPU fallback works but is ~4-5x slower.
 - GNOME Shell (tested on 48) for the indicator extension.
-- `xclip` and `xprop` (x11-utils): used to insert accented/non-ASCII characters like Polish
-  ąęóśżźćń via a paste (ydotool 1.x can only type ASCII keycodes), choosing Ctrl+V or
-  Ctrl+Shift+V based on the focused app. The installer pulls them in.
+- For inserting accented/non-ASCII text (Polish ąęóśżźćń, etc.), since ydotool 1.x types
+  only ASCII: `xclip` + `xprop` on X11, or `wl-clipboard` on Wayland. The installer pulls in
+  all of them.
+
+## Display servers
+
+- **X11 + GNOME**: tested, the primary target.
+- **Wayland (GNOME/KDE)**: supported; non-ASCII inserts via `wl-clipboard` + paste.
+- **wlroots (Sway/Hyprland)**: native Unicode typing via `wtype` if installed.
+
+See `specs/0001-text-insertion.md` for why insertion works this way (no tool types arbitrary
+Unicode into every Linux app, so the portable path is type-ASCII + paste-Unicode).
 
 ## Install
 

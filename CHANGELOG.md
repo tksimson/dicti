@@ -3,6 +3,33 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [Unreleased]
+
+### Added
+- **Pluggable text-insertion backends** (`src/dicti/insert.py`), per spec 0001. Insertion is
+  now chosen by capability detection, with a safe universal default and config overrides.
+  - `clipboard` (default, X11 + Wayland): type ASCII via ydotool, paste non-ASCII via the
+    clipboard (`xclip` on X11, `wl-clipboard` on Wayland), picking the paste shortcut from the
+    focused window. **Brings Wayland (GNOME/KDE) support.**
+  - `wtype` (auto-used on wlroots Wayland): native Unicode typing, no clipboard.
+  - `ydotool` (ASCII-only fallback). `ibus` reserved for spec 0002.
+- **Clipboard etiquette**: the user's clipboard is saved before a paste and restored at
+  session end by default (`preserve_clipboard = true`); set false to leave the transcript on
+  the clipboard as a re-paste safety net.
+- Config: `insert_backend`, `paste_keys` (auto|ctrl+v|ctrl+shift+v), `preserve_clipboard`.
+- `tests/test_insert.py` covering backend selection, ASCII/non-ASCII routing, paste-key
+  modes, and clipboard save/restore.
+- **"Perfect version" recovery.** At STOP the daemon now keeps the full-context
+  transcription of the whole utterance (better than the live-streamed text, especially the
+  first words committed with partial context) and writes it to `~/.cache/dicti/last.txt`.
+  This best version is also what goes on the clipboard when `preserve_clipboard = false`.
+  New `bin/dictate-last` prints it (`--copy` to put it on the clipboard).
+
+### Changed
+- Removed `paste_method` and `keep_clipboard` config keys (superseded by `insert_backend` /
+  `preserve_clipboard`); old configs still load, the removed keys are ignored.
+- Installer adds `wl-clipboard`; the daemon requires the right clipboard tool per session.
+
 ## [0.3.1] - 2026-06-15
 
 ### Fixed

@@ -34,6 +34,7 @@ apt install -y \
   python3-requests \
   xclip \
   x11-utils \
+  wl-clipboard \
   netcat-openbsd \
   cmake \
   git \

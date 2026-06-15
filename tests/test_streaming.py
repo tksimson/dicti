@@ -44,13 +44,26 @@ from dicti.daemon import Daemon, _common_prefix, SAMPLE_RATE  # noqa: E402
 from dicti.config import Config  # noqa: E402
 
 
+class _FakeInserter:
+    """Records inserted pieces; no ydotool/clipboard side effects."""
+    name = "fake"
+
+    def __init__(self):
+        self.typed = []
+
+    def insert(self, text):
+        self.typed.append(text)
+
+    def end_session(self, transcript, preserve_clipboard):
+        pass
+
+
 def _new_daemon():
     cfg = Config()
     cfg.mode = "streaming"
     d = Daemon(cfg)
-    d.typed = []
-    d._type_text = lambda t: d.typed.append(t)   # don't touch ydotool
-    d._copy_to_clipboard = lambda t: None        # don't touch xclip
+    d.inserter = _FakeInserter()
+    d.typed = d.inserter.typed
     return d
 
 

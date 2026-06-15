@@ -1,0 +1,19 @@
+#!/bin/sh
+# Print the last full-context transcript dicti produced (the "perfect version"), or copy it
+# to the clipboard with --copy. dicti saves it at the end of every dictation, so you can
+# recover the best transcription even when your clipboard is preserved.
+# Usage: dictate-last [--copy]
+
+F="$HOME/.cache/dicti/last.txt"
+[ -f "$F" ] || { echo "dictate-last: no transcript yet ($F)" >&2; exit 1; }
+
+if [ "$1" = "--copy" ]; then
+    if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] && command -v wl-copy >/dev/null 2>&1; then
+        wl-copy < "$F"
+    else
+        xclip -selection clipboard < "$F"
+    fi
+    echo "dictate-last: copied last transcript to clipboard" >&2
+else
+    cat "$F"
+fi

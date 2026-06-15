@@ -43,6 +43,7 @@ from pathlib import Path
 import requests
 
 from dicti.config import Config
+from dicti.insert import make_inserter
 
 _XDG = os.environ.get("XDG_RUNTIME_DIR")
 if not _XDG:
@@ -87,19 +88,6 @@ def _is_hallucination(normalized: str) -> bool:
     return normalized in _HALLUCINATION_PHRASES or "amara.org" in normalized
 
 
-# Terminals paste with Ctrl+Shift+V (Ctrl+V is "literal next char" there); almost every
-# other app pastes with Ctrl+V. We pick per focused-window WM_CLASS. Match on substrings so
-# variants are covered (gnome-terminal-server, xfce4-terminal, org.gnome.Console/kgx, ...).
-_TERMINAL_WM_HINTS = (
-    "terminal", "konsole", "xterm", "rxvt", "alacritty", "kitty", "wezterm",
-    "foot", "tilix", "guake", "yakuake", "terminator", "termite", "sakura",
-    "org.gnome.console", "kgx", "io.elementary.terminal", "contour", "st-256color",
-)
-# ydotool key sequences. KEY_LEFTCTRL=29, KEY_LEFTSHIFT=42, KEY_V=47.
-_KEYS_CTRL_V = ["29:1", "47:1", "47:0", "29:0"]
-_KEYS_CTRL_SHIFT_V = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
-
-
 def _common_prefix(a: list[str], b: list[str]) -> list[str]:
     """Longest leading run of words shared by two word lists. Used to find the text that
     has stabilised across two consecutive re-transcription passes (safe to commit)."""
@@ -142,6 +130,9 @@ class Daemon:
         self._typed_any = False        # have we typed anything this session?
         self._session_text = ""        # full text typed this session (for clipboard)
         self._last_progress = 0.0      # monotonic time of last committed word (auto-stop)
+        self.inserter = make_inserter(self.cfg)
+        log.info("Insertion backend: %s (session=%s)", self.inserter.name,
+                 os.environ.get("XDG_SESSION_TYPE", "?"))
         self._write_state()
 
     # ---- state -------------------------------------------------------------
@@ -354,27 +345,51 @@ class Daemon:
                 return
 
     def _emit_words(self, new_words: list[str]) -> None:
-        """Type a list of newly-stable words, append-only, space-joined. Caller holds
-        _flush_lock. Reconstructs spacing and keeps the session text/clipboard in sync."""
+        """Insert a list of newly-stable words, append-only, space-joined. Caller holds
+        _flush_lock. Reconstructs spacing; clipboard etiquette is handled at session end."""
         if not new_words:
             return
         piece = (" " if self._typed_any else "") + " ".join(new_words)
-        self._type_text(piece)
+        self.inserter.insert(piece)
         self._typed_any = True
         self._session_text += piece
         self._last_progress = time.monotonic()  # commit progress, drives silence auto-stop
-        if self.cfg.keep_clipboard:
-            self._copy_to_clipboard(self._session_text)
 
-    def _final_flush(self) -> None:
+    def _final_flush(self) -> str:
         """At STOP: re-transcribe the final context window once more (full context = best
-        quality) and type whatever the stream loop hadn't committed yet (the tail)."""
+        quality) and type whatever the stream loop hadn't committed yet (the tail). Returns
+        the full-window transcription text."""
         pcm = self._read_pcm(self._anchor_byte, self._data_end())
         words = self._clean_transcript(self._transcribe_pcm(pcm)).split() if pcm else []
         with self._flush_lock:
             if len(words) > len(self._displayed_words):
                 self._emit_words(words[len(self._displayed_words):])
                 self._displayed_words = words
+        return " ".join(words)
+
+    def _best_transcript(self, final_text: str) -> str:
+        """The full-context "perfect" transcription of the whole utterance. For a session
+        that never re-anchored, _final_flush already produced it; a long (re-anchored) one is
+        re-transcribed end to end. Better than the live-typed text, especially the first
+        words, which streaming had to commit with only partial context."""
+        if self._anchor_byte == 0:
+            return final_text or self._session_text
+        full = self._read_pcm(0, self._data_end())
+        best = self._clean_transcript(self._transcribe_pcm(full)) if full else ""
+        return best or final_text or self._session_text
+
+    def _save_last_transcript(self, text: str) -> None:
+        """Write the best transcript to a file so the perfect version is recoverable even
+        when the clipboard is preserved (see preserve_clipboard)."""
+        if not text:
+            return
+        try:
+            path = Path.home() / ".cache" / "dicti" / "last.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text + "\n")
+            log.info("Saved transcript (%d chars) to %s", len(text), path)
+        except Exception as e:
+            log.warning("Could not save transcript: %s", e)
 
     def _read_pcm(self, start: int, end: int) -> bytes:
         """Read raw PCM bytes [start:end] (offsets into the data, header excluded)."""
@@ -413,15 +428,21 @@ class Daemon:
 
         try:
             if streaming:
-                self._final_flush()
-                if self._typed_any:
-                    self.notify("done", self._session_text[:80], urgency="low")
+                final_text = self._final_flush()
+                best = self._best_transcript(final_text)
+                self._save_last_transcript(best)
+                # The perfect (full-context) text goes to the clipboard, so preserve=false
+                # leaves the best version, not the streamed one, as the re-paste fallback.
+                self.inserter.end_session(best, self.cfg.preserve_clipboard)
+                if self._typed_any or best:
+                    self.notify("done", best[:80], urgency="low")
                 else:
                     self.notify("empty transcript", "", urgency="normal")
             else:
                 text = self._clean_transcript(self._transcribe())
                 if text:
-                    self._insert(text)
+                    self.inserter.insert(text)
+                    self.inserter.end_session(text, self.cfg.preserve_clipboard)
                     self.notify("done", text[:80], urgency="low")
                 else:
                     self.notify("empty transcript", "", urgency="normal")
@@ -546,64 +567,6 @@ class Daemon:
         log.info("Inference %.2fs -> %d chars: %r", elapsed, len(text), text[:120])
         return text
 
-    def _insert(self, text: str) -> None:
-        if self.cfg.paste_method == "clipboard":
-            self._paste_via_clipboard(text)
-            return
-        # default: type the text as keystrokes (universal)
-        if self.cfg.keep_clipboard:
-            self._copy_to_clipboard(text)
-        self._type_text(text)
-
-    def _type_text(self, text: str) -> None:
-        """Insert text. ydotool types ASCII reliably and universally, but ydotool 1.x
-        injects raw US-layout keycodes and silently drops anything off that layout (e.g.
-        Polish ąęóśżźćń). So non-ASCII text is inserted byte-exact via the clipboard + a
-        paste keystroke instead. (xdotool would type Unicode, but its live keysym remapping
-        can deadlock the X server, it froze this machine, so it is not used.)"""
-        if text.isascii():
-            subprocess.run(
-                ["ydotool", "type", "--key-delay", str(self.cfg.key_delay_ms), "--file", "-"],
-                input=text.encode("utf-8"),
-                check=True, timeout=60,
-            )
-        else:
-            self._paste_via_clipboard(text)
-
-    def _copy_to_clipboard(self, text: str) -> None:
-        try:
-            subprocess.run(
-                ["xclip", "-selection", "clipboard"],
-                input=text.encode("utf-8"),
-                check=True,
-                timeout=2,
-            )
-        except Exception as e:
-            log.warning("clipboard copy failed: %s", e)
-
-    def _paste_via_clipboard(self, text: str) -> None:
-        self._copy_to_clipboard(text)
-        time.sleep(0.05)  # let the clipboard settle before pasting
-        keys = _KEYS_CTRL_SHIFT_V if self._active_window_is_terminal() else _KEYS_CTRL_V
-        subprocess.run(["ydotool", "key", *keys], check=True, timeout=2)
-        time.sleep(0.1)  # let the app read the clipboard before anything overwrites it
-
-    def _active_window_is_terminal(self) -> bool:
-        """True if the focused window looks like a terminal (so paste = Ctrl+Shift+V).
-        Reads WM_CLASS via xprop (a harmless query, never remaps the keymap). On any
-        failure assume a normal app (Ctrl+V), which is correct for the large majority."""
-        try:
-            root = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
-                                  capture_output=True, text=True, timeout=1).stdout
-            wid = root.strip().split()[-1]
-            if not wid.startswith("0x"):
-                return False
-            out = subprocess.run(["xprop", "-id", wid, "WM_CLASS"],
-                                 capture_output=True, text=True, timeout=1).stdout.lower()
-        except Exception:
-            return False
-        return any(hint in out for hint in _TERMINAL_WM_HINTS)
-
     # ---- startup checks ----------------------------------------------------
 
     def check_whisper_backend(self) -> None:
@@ -666,9 +629,16 @@ class Daemon:
 
 
 def preflight() -> None:
-    for bin_ in ("pw-record", "xclip", "ydotool", "notify-send", "journalctl"):
+    for bin_ in ("pw-record", "ydotool", "notify-send", "journalctl"):
         if not shutil.which(bin_):
             raise SystemExit(f"Missing required binary: {bin_}")
+    # Clipboard tool for inserting non-ASCII text: wl-clipboard on Wayland, xclip on X11.
+    from dicti import insert
+    clip = "wl-copy" if insert.is_wayland() else "xclip"
+    if not shutil.which(clip):
+        log.warning("Clipboard tool %s not found: non-ASCII text (e.g. Polish) won't insert. "
+                    "Install it (%s).", clip,
+                    "wl-clipboard" if clip == "wl-copy" else "xclip")
     if not SOCK_PATH.parent.exists():
         raise SystemExit(f"XDG_RUNTIME_DIR missing: {SOCK_PATH.parent}")
 

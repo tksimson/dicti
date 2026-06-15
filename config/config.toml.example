@@ -40,13 +40,16 @@ skip_silent_recordings = true  # if no part of the recording exceeds the speech 
                              # threshold (silence_rms_threshold), skip transcription entirely
                              # instead of letting whisper hallucinate on silence.
 
-# --- Text insertion ---
-paste_method = "type"        # "type" = type the text as keystrokes (universal; recommended)
-                             # "clipboard" = xclip + Ctrl+Shift+V (legacy)
-                             # Note: with "type", ASCII is typed via ydotool but text with
-                             # non-ASCII (e.g. Polish ąęóśżźćń) is inserted via clipboard +
-                             # paste, since ydotool 1.x cannot type non-ASCII keys. The paste
-                             # shortcut is auto-picked from the focused window: Ctrl+Shift+V
-                             # for terminals, Ctrl+V elsewhere (needs xprop / x11-utils).
-key_delay_ms = 0             # inter-key delay for "type" method; 0 = fastest
-keep_clipboard = true        # also leave the transcript on the clipboard as a safety net
+# --- Text insertion --- (see specs/0001-text-insertion.md)
+# ASCII is typed via ydotool (universal). Non-ASCII (e.g. Polish ąęóśżźćń) is inserted via
+# the clipboard + a paste keystroke, because ydotool 1.x cannot type non-ASCII keys (and
+# xdotool, which can, deadlocked the X server). On wlroots Wayland, wtype types Unicode.
+insert_backend = "auto"      # "auto" | "clipboard" | "wtype" | "ydotool" | "ibus".
+                             # auto: wtype on wlroots Wayland, else clipboard. clipboard works
+                             # everywhere (X11 + Wayland). ydotool = ASCII-only fallback.
+paste_keys = "auto"          # paste shortcut for non-ASCII: "auto" (terminals get
+                             # Ctrl+Shift+V via xprop focus detection, other apps Ctrl+V),
+                             # or force "ctrl+v" / "ctrl+shift+v".
+preserve_clipboard = true    # restore your clipboard after a paste. Set false to instead
+                             # leave the transcript on the clipboard as a re-paste safety net.
+key_delay_ms = 0             # inter-key delay when typing; 0 = fastest
