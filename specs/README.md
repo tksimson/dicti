@@ -12,4 +12,4 @@ Convention:
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-text-insertion.md) | Text insertion architecture | v1 SHIPPED |
-| [0002](0002-ibus-engine.md) | IBus input-method engine (premium path) | DRAFT (prototype-gated) |
+| [0002](0002-ibus-engine.md) | IBus input-method engine (premium path) | REJECTED (spike failed) |

@@ -1,8 +1,37 @@
 # Spec 0002: IBus input-method engine (premium insertion path)
 
-- **Status:** DRAFT (prototype-gated; not started)
+- **Status:** REJECTED (spike 2026-06-17, failed both gate requirements)
 - **Date:** 2026-06-15
 - **Depends on:** [0001 Text insertion](0001-text-insertion.md)
+
+## Spike result (2026-06-17): REJECTED
+
+A minimal passthrough engine was built (`prototype/ibus/dicti_ibus.py`: `layout="default"`,
+`do_process_key_event` -> False, a unix-socket `commit_text` bridge) and tested live on the
+target GNOME + Polish setup. Both hard requirements failed:
+
+1. **Transparency failed.** With the engine active, physical *ASCII* typing worked but the
+   user's **Polish layout broke** (no diacritics). `layout="default"` inherited the primary
+   (US) layout rather than following the user's active `pl` source; an active IBus engine
+   owns the layout and a passthrough does not reach the secondary XKB layout. This is exactly
+   the multilingual-typing breakage the gate existed to prevent.
+2. **It did not solve the target problem.** `commit_text` injected correctly into GNOME Text
+   Editor (a standard GTK app) but produced **garbage in Zed's terminal** (`wklejone?^V^[e`).
+   Zed's terminal does not implement the standard text-input protocol, the *same* root cause
+   that made clipboard Ctrl+V fail there. IBus gives no advantage over clipboard in standard
+   apps and still cannot reach Zed's non-standard terminal.
+
+**Conclusion:** the integrated-terminal gap (Zed/VS Code custom terminals) is not an
+insertion-method problem dicti can fix from outside; those surfaces reject external text
+injection by any method. Stay on the clipboard backend (spec 0001). For such terminals the
+practical lever is `paste_keys = "ctrl+shift+v"` (worth testing: Zed's terminal likely
+accepts Ctrl+Shift+V as paste even though it rejects Ctrl+V), or dictate into a standard app.
+The prototype is kept under `prototype/ibus/` as the record of this spike; do not revive IBus
+without a fundamentally different transparency approach.
+
+---
+
+(original design below, kept for the record)
 
 ## Why
 
