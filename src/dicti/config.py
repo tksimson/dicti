@@ -61,6 +61,14 @@ class Config:
     #                                     leave the transcript on the clipboard as a safety net
     key_delay_ms: int = 0               # inter-key delay for typing; 0 = fastest
 
+    # Notifications. The animated panel icon already shows idle/listening/processing,
+    # so per-dictation "done"/status popups are just noise (they also light the clock's
+    # unread-notification dot). Default to errors only.
+    #   "error" (default): only critical failures (transcription error, whisper-on-CPU)
+    #   "off":             never notify
+    #   "all":             also show routine status (done / empty / busy / cancelled)
+    notify_level: str = "error"
+
     @classmethod
     def load(cls) -> "Config":
         path = _config_path()

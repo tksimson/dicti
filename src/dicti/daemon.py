@@ -152,6 +152,14 @@ class Daemon:
 
     def notify(self, summary: str, body: str = "",
                urgency: str = "low", timeout_ms: int = 2000) -> None:
+        # Gate by notify_level. Routine status (low/normal) is suppressed unless
+        # "all"; only "critical" survives at the default "error" level (the panel
+        # icon conveys normal state, so routine popups are pure noise).
+        level = getattr(self.cfg, "notify_level", "error")
+        if level == "off":
+            return
+        if level == "error" and urgency != "critical":
+            return
         try:
             subprocess.run(
                 ["notify-send", "-u", urgency, "-t", str(timeout_ms),
