@@ -3,9 +3,16 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
-## [Unreleased]
+## [0.3.5] - 2026-06-17
 
 ### Added
+- **Animated panel indicator.** The GNOME Shell extension now draws a custom five-bar glyph
+  with Cairo, animated per state: a static "mic" trapezoid when idle, an organic equalizer
+  bounce while listening, a left-to-right fill while transcribing (deep-green + pink brand
+  colors). The animation timer only runs while active, so idle costs nothing. The optional
+  AppIndicator (KDE/other desktops) uses matching static SVGs (`src/dicti/icons/`).
+- **Brand assets** in `branding/` (app-icon tile + per-state marks) and a README hero with a
+  synthetic demo GIF of the indicator cycling through its states.
 - **Pluggable text-insertion backends** (`src/dicti/insert.py`), per spec 0001. Insertion is
   now chosen by capability detection, with a safe universal default and config overrides.
   - `clipboard` (default, X11 + Wayland): type ASCII via ydotool, paste non-ASCII via the
@@ -26,6 +33,10 @@ All notable changes to dicti are documented here. Format loosely follows
   New `bin/dictate-last` prints it (`--copy` to put it on the clipboard).
 
 ### Changed
+- **Notifications are quiet by default.** New `notify_level` config
+  (`error` default | `off` | `all`): the per-dictation "done"/status popups are gone (the
+  animated icon already shows state, and they lit the clock's unread-notification dot). Only
+  genuine failures (transcription error, whisper-on-CPU) notify at the default level.
 - Removed `paste_method` and `keep_clipboard` config keys (superseded by `insert_backend` /
   `preserve_clipboard`); old configs still load, the removed keys are ignored.
 - Installer adds `wl-clipboard`; the daemon requires the right clipboard tool per session.

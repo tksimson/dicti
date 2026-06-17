@@ -18,7 +18,7 @@
 I built this because I was used to a good dictation app on the Mac and wanted the same thing
 on Linux. Tested on Debian + GNOME (X11).
 
-> Status: v0.3 (alpha). Live streaming dictation; works well day to day, rough edges remain.
+> Status: v0.3.5 (alpha). Live streaming dictation; works well day to day, rough edges remain.
 > See the [ROADMAP](ROADMAP.md).
 
 ## Features
