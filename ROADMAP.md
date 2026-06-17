@@ -4,7 +4,7 @@ dicti is a local, offline live-dictation tool for Linux. The aim: the
 best-in-class push-to-talk dictation experience on Linux, GNOME first, then
 broader desktops and distros.
 
-## v0.2, Daily-driver fixes (current)
+## v0.2, Daily-driver fixes (shipped)
 
 The everyday-pain release. All shipped:
 
@@ -45,6 +45,24 @@ Found along the way: chunked streaming destroyed whisper's context and tanked qu
 no VAD lets silence hallucinations run away (settled on a loosely-padded VAD); and xdotool's
 Unicode typing can deadlock X (use clipboard for non-ASCII instead).
 
+## v0.3.5, Identity & calm (shipped)
+
+The "looks like a real product" release.
+
+- **Animated bar indicator**, the GNOME Shell extension draws a custom five-bar glyph (Cairo):
+  static "mic" trapezoid when idle, an organic equalizer bounce while listening, a
+  left-to-right fill while transcribing, in the deep-green + pink brand colors. The animation
+  timer runs only while active, so idle costs nothing. Matching static SVGs back the optional
+  AppIndicator on KDE/other desktops. Brand assets + a demo GIF now front the README.
+- **Quiet by default**, new `notify_level` config (`error` default | `off` | `all`) removes the
+  per-dictation "done"/status popups (which also lit GNOME's unread-notification dot); only
+  genuine failures (transcription error, whisper-on-CPU) notify.
+- **Insertion backends settled** (spec 0001): clipboard default everywhere, `wtype` on wlroots,
+  `ydotool` ASCII fallback, documented as honest support tiers (GNOME/Xorg tested; wlroots /
+  other X11 / GNOME-Wayland testers-wanted).
+- **Input-method fix**, documented that GNOME-Xorg + IBus is the native stack and Polish =
+  the `pl` "programmers" XKB layout (the rejected IBus spike, spec 0002, had left it broken).
+
 ## v0.4, Word-level refinement & polish (next)
 
 Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
@@ -74,19 +92,52 @@ Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
   `wl-clipboard`) / `wtype` (wlroots) / `ydotool`. Next: validate on real Wayland/wlroots
   hardware. (The **IBus engine**, spec 0002, was spiked and **rejected**: it broke the user's
   Polish XKB layout and still could not inject into Zed's non-standard terminal.)
-- **Integrated terminals** (Zed/VS Code custom terminals) reject external text injection by
-  any method (clipboard Ctrl+V and IBus both fail). Not fixable from dicti's side; the
-  practical lever is `paste_keys = "ctrl+shift+v"` per the spec, or dictate into a standard app.
+- **Integrated terminals** (Zed/VS Code): accented text doesn't paste, but it is fixable.
+  Diagnosis (0.3.5): a *manual* Ctrl+Shift+V pastes Polish into Zed's terminal fine, so the
+  clipboard path works. dicti sends plain Ctrl+V because Zed reports one window class
+  (`dev.zed.Zed`) for both the editor and terminal panes, so focus-based auto-detection can't
+  tell which pane is active. Planned fix: a per-app paste-shortcut override (force
+  ctrl+shift+v for known editor-with-terminal apps), accepting it then mis-fires in those
+  apps' *editor* panes. Post-launch.
 - **Non-PipeWire** audio fallback (ALSA/`arecord`).
 - **Non-systemd** init support; packaging as **pipx**, **.deb**, and **AUR**.
 - **Other desktops** (KDE/Plasma indicator, generic tray).
-- Colored/custom indicator icons; optional sound cues.
+- Optional sound cues on start/stop. (Colored/animated indicator icons shipped in v0.3.5.)
 - Per-app insertion profiles; custom vocabulary / punctuation commands.
 - Model selection (tiny..large) and download helper from config.
 - **Language preferences pane**: pick which Whisper languages to use (e.g. Polish +
   English), with optional per-session lock for soft/ambiguous audio.
 
+## Direction under exploration: dictation history & re-paste
+
+dicti owns something no clipboard manager does, the dictation stream, and already keeps the
+last transcript (`bin/dictate-last`, `~/.cache/dicti/last.txt`). Growing that into a searchable
+history extends the project's "never lose your words" theme. Phased so the lean, on-brand value
+lands first and the ambitious part stays a deliberate decision, not a drift.
+
+- **Dictation history** (cheap, high-value): persist the last N dictations (JSONL or SQLite
+  under `~/.local/share/dicti/`), exposed via CLI (`dictate-history`, `dictate-last --list`) and
+  a "Recent" submenu on the indicator, click to re-paste/re-type. No heavy GUI.
+- **Variations per utterance** (differentiated): dicti produces both the live-streamed text and
+  the full-context "perfect" version of each utterance. Keeping these (and alternative passes)
+  lets you pick the best rendering of the same dictation, something that falls straight out of
+  how dicti works and no clipboard tool can replicate.
+- **Searchable picker**: surface history through a fuzzy finder (rofi/wofi/fzf), re-paste by
+  selection. Composable and lightweight, instead of a bespoke browser.
+- **Clipboard alongside (evaluate carefully)**: a unified dictation + clipboard history is the
+  user-facing ask, but clipboard management is a crowded, solved space (CopyQ, GPaste, Clipboard
+  Indicator). Lean toward *integrating with* an existing clipboard manager, or surfacing
+  clipboard only where it clearly adds value, rather than rebuilding one. The dictation half is
+  the moat; the clipboard half is table stakes.
+
+Open question, flagged honestly: a history browser shifts dicti from "invisible dictation
+daemon" toward "dictation productivity app", which tensions with the lean non-goal below. Decide
+deliberately before building the browser.
+
 ## Non-goals
 
 - Cloud/online transcription. dicti is offline by design.
-- A heavyweight GUI app. It stays a lean daemon + tray indicator.
+- A heavyweight GUI app. It stays a lean daemon + tray indicator (history, if it lands, rides
+  the menu + a fuzzy finder, not a bespoke UI).
+- Rebuilding a general clipboard manager. If clipboard history lands, integrate with the
+  mature tools rather than compete with CopyQ/GPaste on commodity ground.
