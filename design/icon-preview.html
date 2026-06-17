@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dicti — panel icon concepts</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #1a1d23;
+    --fg: #d6d9df;
+    --dim: #6b7280;
+    --rec: #e01b24;
+    --acc: #3ddc91;     /* terminal green */
+    --amber: #ffb000;   /* retro amber */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    padding: 40px 32px 80px;
+  }
+  h1 { font-size: 18px; font-weight: 600; letter-spacing: .5px; }
+  h1 .b { color: var(--acc); }
+  p.sub { color: var(--dim); max-width: 680px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 32px; }
+  @media (max-width: 880px){ .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid #262b33; border-radius: 12px;
+    padding: 22px 24px 26px; box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .tag { color: var(--dim); font-size: 12px; margin-bottom: 18px; }
+
+  /* mock GNOME top panel */
+  .panel {
+    display: flex; align-items: center; gap: 18px; justify-content: center;
+    background: #000; border-radius: 8px; height: 34px; padding: 0 16px;
+    margin-bottom: 22px;
+  }
+  .panel .clock { color: #cfd3da; font-size: 13px; }
+  .slot { display: flex; align-items: center; gap: 6px; }
+
+  /* states row, zoomed so detail is visible */
+  .states { display: flex; gap: 20px; justify-content: space-between; }
+  .state { flex: 1; text-align: center; }
+  .stage {
+    height: 64px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 8px;
+  }
+  .lbl { font-size: 11px; color: var(--dim); text-transform: lowercase; letter-spacing: .5px; }
+
+  /* ---------- shared icon sizing ---------- */
+  .ico { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+  .ico.big { transform: scale(2.4); transform-origin: center; }
+
+  /* ===== VARIANT A: RETRO TERMINAL (blocky / monochrome amber-green) ===== */
+  /* idle: terminal prompt-ish mic from block chars */
+  .a-mic { color: var(--fg); font-size: 16px; letter-spacing: -1px; }
+
+  /* listening: blocky equalizer using real bars (▁▂▃▄▅▆▇) feel */
+  .eq { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+  .eq i { width: 2.5px; background: var(--acc); border-radius: 1px; height: 30%; }
+  .eq.amber i { background: var(--amber); }
+  .eq.red i { background: var(--rec); }
+  .eq i:nth-child(1){ animation: b1 .9s ease-in-out infinite; }
+  .eq i:nth-child(2){ animation: b2 .7s ease-in-out infinite; }
+  .eq i:nth-child(3){ animation: b3 .5s ease-in-out infinite; }
+  .eq i:nth-child(4){ animation: b2 .8s ease-in-out infinite; }
+  .eq i:nth-child(5){ animation: b1 .6s ease-in-out infinite; }
+  @keyframes b1 { 0%,100%{height:25%} 50%{height:95%} }
+  @keyframes b2 { 0%,100%{height:40%} 50%{height:70%} }
+  @keyframes b3 { 0%,100%{height:20%} 50%{height:100%} }
+
+  /* processing: retro braille spinner (pip/npm vibe) */
+  .braille { font-size: 17px; color: var(--acc); }
+  .braille.amber { color: var(--amber); }
+
+  /* ===== VARIANT B: MODERN SMOOTH ===== */
+  .m-mic svg { width: 18px; height: 18px; stroke: var(--fg); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  /* listening: smooth sinewave bars */
+  .eq.smooth i { width: 2.5px; border-radius: 2px; background: var(--rec); }
+  /* processing: smooth arc spinner */
+  .arc { width: 16px; height: 16px; border: 2.2px solid rgba(61,220,145,.25); border-top-color: var(--acc); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* listening dot pulse (for reference / idle->listen) */
+  .recdot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ opacity: .35; transform: scale(.8);} 50%{ opacity: 1; transform: scale(1.1);} }
+
+  .note { margin-top: 14px; color: var(--dim); font-size: 12px; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle; margin:0 4px; }
+  footer { margin-top: 48px; color: var(--dim); font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1><span class="b">dicti</span> — panel icon + animation concepts</h1>
+  <p class="sub">Two directions for the idle / listening / processing states, shown in a mock GNOME top bar and zoomed 2.4× so you can see the motion. Colors are placeholders (terminal-green, retro-amber, record-red). Pick a direction + an accent and I'll port it into the real extension.</p>
+
+  <div class="grid">
+
+    <!-- VARIANT A -->
+    <div class="card">
+      <h2>A · Retro terminal</h2>
+      <div class="tag">blocky equalizer · braille spinner · monochrome (pip/docker energy)</div>
+
+      <div class="panel">
+        <div class="clock">Tue 09:41</div>
+        <div class="slot"><span class="ico"><span class="eq amber"><i></i><i></i><i></i><i></i><i></i></span></span></div>
+        <div class="clock" style="color:#6b7280">in panel →</div>
+      </div>
+
+      <div class="states">
+        <div class="state">
+          <div class="stage"><span class="ico big"><span class="a-mic">▕▌▏</span></span></div>
+          <div class="lbl">idle</div>
+        </div>
+        <div class="state">
+          <div class="stage"><span class="ico big"><span class="eq amber"><i></i><i></i><i></i><i></i><i></i></span></span></div>
+          <div class="lbl">listening</div>
+        </div>
+        <div class="state">
+          <div class="stage"><span class="ico big"><span class="braille amber" id="brA">⠋</span></span></div>
+          <div class="lbl">processing</div>
+        </div>
+      </div>
+      <div class="note">Idle is a small mic-ish glyph; listening = bouncing block bars; processing = spinning braille dots. Amber reads "retro CRT".</div>
+    </div>
+
+    <!-- VARIANT B -->
+    <div class="card">
+      <h2>B · Modern smooth</h2>
+      <div class="tag">clean mic · sinewave bars · arc spinner</div>
+
+      <div class="panel">
+        <div class="clock">Tue 09:41</div>
+        <div class="slot"><span class="ico"><span class="eq smooth"><i></i><i></i><i></i><i></i><i></i></span></span></div>
+        <div class="clock" style="color:#6b7280">in panel →</div>
+      </div>
+
+      <div class="states">
+        <div class="state">
+          <div class="stage"><span class="ico big m-mic">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+          </span></div>
+          <div class="lbl">idle</div>
+        </div>
+        <div class="state">
+          <div class="stage"><span class="ico big"><span class="eq smooth"><i></i><i></i><i></i><i></i><i></i></span></span></div>
+          <div class="lbl">listening</div>
+        </div>
+        <div class="state">
+          <div class="stage"><span class="ico big"><span class="arc"></span></span></div>
+          <div class="lbl">processing</div>
+        </div>
+      </div>
+      <div class="note">Clean lucide-style mic; listening = smooth red bars; processing = arc spinner. Native GNOME feel, just livelier.</div>
+    </div>
+
+  </div>
+
+  <footer>
+    accents:
+    <span class="swatch" style="background:#3ddc91"></span>terminal-green
+    <span class="swatch" style="background:#ffb000"></span>retro-amber
+    <span class="swatch" style="background:#e01b24"></span>record-red
+    — mix and match per state (e.g. amber idle, red listening).
+  </footer>
+
+<script>
+  // braille spinner frames (pip/npm classic)
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  let i = 0;
+  const el = document.getElementById('brA');
+  setInterval(() => { el.textContent = frames[i = (i+1) % frames.length]; }, 90);
+</script>
+</body>
+</html>

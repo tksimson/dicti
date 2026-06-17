@@ -44,11 +44,14 @@ if not _XDG:
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"
 
-# Monochrome themed icons (follow the panel theme). Colored SVGs are a later polish.
+# Brand bar-icons (deep green + pink), shipped with the package. The GNOME Shell
+# extension draws these animated with Cairo; here (KDE/other) we show the static
+# per-state SVG. Referenced by basename via the indicator's icon theme path.
+ICON_DIR = Path(__file__).parent / "icons"
 ICONS = {
-    "IDLE": "audio-input-microphone-symbolic",
-    "LISTENING": "media-record-symbolic",
-    "PROCESSING": "content-loading-symbolic",
+    "IDLE": "dicti-idle",
+    "LISTENING": "dicti-listening",
+    "PROCESSING": "dicti-processing",
 }
 LABELS = {
     "IDLE": "Idle",
@@ -74,6 +77,8 @@ class Indicator:
             ICONS["IDLE"],
             AppIndicator.IndicatorCategory.APPLICATION_STATUS,
         )
+        # Resolve our shipped SVGs by basename.
+        self.ind.set_icon_theme_path(str(ICON_DIR))
         self.ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         self.ind.set_title("dicti")
 

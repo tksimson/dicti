@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dicti — v3 (deeper green + pink/purple)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #1a1d23;
+    --fg: #d6d9df;
+    --dim: #6b7280;
+    /* deeper, warmer greens */
+    --g:      #4fb070;   /* primary bars (deeper + warmer than mint) */
+    --g-deep: #3c9a5e;   /* brand deep green */
+    --g-warm: #5cb85f;   /* warmer alt */
+    /* pink / purple accents */
+    --pink:   #e85ba6;
+    --orchid: #d262c8;
+    --purple: #b070f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.55 ui-monospace,"JetBrains Mono","DejaVu Sans Mono",monospace; padding:40px 32px 90px; }
+  h1 { font-size:18px; font-weight:600; letter-spacing:.5px; }
+  h1 .b { color:var(--g); }
+  .sub { color:var(--dim); max-width:720px; }
+  h2 { font-size:14px; margin:38px 0 4px; }
+  .hint { color:var(--dim); font-size:12px; margin-bottom:16px; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; }
+  .card { background:var(--card); border:1px solid #262b33; border-radius:12px;
+    padding:20px 22px 22px; min-width:150px; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.35); }
+  .card.sel { border-color:var(--g); box-shadow:0 0 0 1px var(--g),0 8px 30px rgba(0,0,0,.4); }
+  .stage { height:74px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
+  .name { font-size:12px; } .desc { font-size:11px; color:var(--dim); margin-top:2px; }
+  .pick { font-size:10px; color:var(--g); margin-top:6px; letter-spacing:.5px; }
+
+  .panel { display:flex; align-items:center; gap:18px; justify-content:center;
+    background:#000; border-radius:8px; height:34px; padding:0 18px; margin:20px 0 6px; max-width:380px; }
+  .panel .clock { color:#cfd3da; font-size:13px; }
+
+  /* ---- bar engine ---- */
+  .bars { display:inline-flex; align-items:flex-end; gap:2px; height:16px; }
+  .bars i { width:2.6px; background:var(--g); border-radius:1.5px; }
+  .bars.big { transform:scale(2.7); transform-origin:bottom center; }
+  .bars.pink i{background:var(--pink)} .bars.orchid i{background:var(--orchid)} .bars.purple i{background:var(--purple)}
+
+  /* IDLE mic refinements (static) */
+  /* dome: rounded crown */
+  .mic-dome i{height:55%; border-radius:2px} .mic-dome i:nth-child(2),.mic-dome i:nth-child(4){height:82%}
+  .mic-dome i:nth-child(3){height:100%; border-radius:3px 3px 1.5px 1.5px}
+  .mic-dome i:nth-child(1),.mic-dome i:nth-child(5){border-radius:3px 3px 1.5px 1.5px}
+  /* trapezoid/capsule: flat crown of 3 equal tall bars, short outer "shoulders" */
+  .mic-trap i{height:50%} .mic-trap i:nth-child(2),.mic-trap i:nth-child(3),.mic-trap i:nth-child(4){height:100%; border-radius:3px 3px 1px 1px}
+  /* capsule2: tall rounded middle pair = mic head, outers as stem */
+  .mic-cap i{height:42%} .mic-cap i:nth-child(2),.mic-cap i:nth-child(4){height:88%; border-radius:4px 4px 1px 1px}
+  .mic-cap i:nth-child(3){height:100%; border-radius:4px 4px 1px 1px}
+
+  /* LISTENING (JS-random heights + smooth transition) */
+  .eqjs i { height:30%; transition: height .16s cubic-bezier(.4,0,.2,1); }
+
+  /* PROCESSING 1: SCAN — flat low baseline, single peak sweeps L→R→L */
+  .scan i { height:22%; }
+  .scan i { animation: scan 1.6s ease-in-out infinite; }
+  .scan i:nth-child(1){animation-delay:0s}    .scan i:nth-child(2){animation-delay:.16s}
+  .scan i:nth-child(3){animation-delay:.32s}  .scan i:nth-child(4){animation-delay:.48s}
+  .scan i:nth-child(5){animation-delay:.64s}
+  @keyframes scan { 0%,18%,100%{height:22%} 9%{height:100%} }
+
+  /* PROCESSING 2: FILL — bars fill to full L→R (progress), then clear */
+  .fill i { height:18%; animation: fillk 1.7s ease infinite; }
+  .fill i:nth-child(1){animation-delay:0s}   .fill i:nth-child(2){animation-delay:.16s}
+  .fill i:nth-child(3){animation-delay:.32s} .fill i:nth-child(4){animation-delay:.48s}
+  .fill i:nth-child(5){animation-delay:.64s}
+  @keyframes fillk { 0%{height:18%} 28%{height:100%} 82%{height:100%} 100%{height:18%} }
+
+  /* PROCESSING 3: COLLAPSE — all shrink to dots then rebuild (orderly, mechanical) */
+  .coll i { animation: collk 1.2s ease-in-out infinite; }
+  .coll i:nth-child(1),.coll i:nth-child(5){height:35%}
+  .coll i:nth-child(2),.coll i:nth-child(4){height:65%}
+  .coll i:nth-child(3){height:100%}
+  @keyframes collk { 0%,100%{transform:scaleY(1)} 45%{transform:scaleY(.18)} }
+  .coll i { transform-origin:bottom; }
+
+  /* brand tile */
+  .tile { width:104px; height:104px; border-radius:24px;
+    background:linear-gradient(150deg,#16241c,#0d1518); border:1px solid #29402f;
+    display:inline-flex; align-items:center; justify-content:center; box-shadow:0 12px 34px rgba(0,0,0,.5); }
+  .tile .bars{ height:46px; gap:5px } .tile .bars i{ width:8px; border-radius:3px }
+
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin:0 5px;border:1px solid rgba(255,255,255,.12)}
+  code{background:#11151b;padding:1px 6px;border-radius:4px;color:var(--g-warm)}
+</style>
+</head>
+<body>
+  <h1><span class="b">dicti</span> — v3 · deeper green + pink/purple accent</h1>
+  <p class="sub">Tweaks applied: warmer/deeper green, idle pushed toward a real mic shape, listening on the pink/purple accent with organic randomness (not strobing), processing redone so it clearly differs from listening. Panel mock then zoomed 2.7×.</p>
+
+  <div class="panel">
+    <div class="clock">Tue 09:41</div>
+    <div class="bars eqjs pink" data-eq><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="clock" style="color:#6b7280">← listening (pink, organic)</div>
+  </div>
+
+  <h2>1 · Idle / logo — more mic now. Pick the crown.</h2>
+  <div class="hint">All static. Rounded/flat tops so the silhouette reads as a microphone head built from bars.</div>
+  <div class="row">
+    <div class="card sel">
+      <div class="stage"><div class="bars big mic-dome"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Dome</div><div class="desc">rounded crown, soft mic head.</div><div class="pick">my pick</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big mic-trap"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Trapezoid / capsule</div><div class="desc">flat top of 3 tall bars + short shoulders = clearest "mic".</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big mic-cap"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Twin-head</div><div class="desc">tall rounded centre trio, low outer stems.</div>
+    </div>
+  </div>
+
+  <h2>2 · Listening accent — pick the pink/purple</h2>
+  <div class="hint">Same organic bounce, three accent shades. This is the brand contrast color too.</div>
+  <div class="row">
+    <div class="card sel">
+      <div class="stage"><div class="bars big eqjs pink" data-eq><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Pink <code>#e85ba6</code></div><div class="desc">warm, friendly, high contrast on green.</div><div class="pick">my pick</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big eqjs orchid" data-eq><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Orchid <code>#d262c8</code></div><div class="desc">pink↔purple midpoint.</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big eqjs purple" data-eq><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Purple <code>#b070f0</code></div><div class="desc">cooler, more "tech".</div>
+    </div>
+  </div>
+
+  <h2>3 · Processing — now clearly NOT listening</h2>
+  <div class="hint">Bars stay low/orderly with one moving element, vs the all-bars organic bounce of listening.</div>
+  <div class="row">
+    <div class="card sel">
+      <div class="stage"><div class="bars big fill"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Fill (progress)</div><div class="desc">fills L→R then clears. Reads "loading…". Most distinct.</div><div class="pick">my pick</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big scan"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Scan</div><div class="desc">flat baseline, single peak sweeps across (Cylon/pip-dot).</div>
+    </div>
+    <div class="card">
+      <div class="stage"><div class="bars big coll"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="name">Collapse</div><div class="desc">whole shape pumps down→up. Mechanical, "thinking".</div>
+    </div>
+  </div>
+
+  <h2>4 · Brand tile (deep green + pink live state)</h2>
+  <div class="row" style="align-items:center">
+    <div class="card" style="min-width:0"><div class="stage" style="height:130px"><div class="tile"><div class="bars mic-dome"><i></i><i></i><i></i><i></i><i></i></div></div></div><div class="name">tile · idle mic</div></div>
+    <div class="card" style="min-width:0"><div class="stage" style="height:130px"><div class="tile"><div class="bars eqjs pink" data-eq><i></i><i></i><i></i><i></i><i></i></div></div></div><div class="name">tile · live (pink)</div></div>
+  </div>
+
+  <p class="sub" style="margin-top:40px">
+    greens:
+    <span class="swatch" style="background:#4fb070"></span><code>#4fb070</code> primary
+    <span class="swatch" style="background:#3c9a5e"></span><code>#3c9a5e</code> deep
+    <span class="swatch" style="background:#5cb85f"></span><code>#5cb85f</code> warmer
+    &nbsp;·&nbsp; accents:
+    <span class="swatch" style="background:#e85ba6"></span>pink
+    <span class="swatch" style="background:#d262c8"></span>orchid
+    <span class="swatch" style="background:#b070f0"></span>purple
+    — say warmer/deeper and I'll nudge.
+  </p>
+
+<script>
+  // Organic equalizer: each bar gets its own slightly-different update cadence,
+  // random target heights, smoothed by CSS transition. Looks alive, not strobing.
+  document.querySelectorAll('[data-eq]').forEach(group => {
+    const bars = [...group.querySelectorAll('i')];
+    bars.forEach((bar, idx) => {
+      const tick = () => {
+        // weighted toward mid heights so it breathes rather than flails
+        const h = 28 + Math.random() * Math.random() * 72;   // 28%..100%, biased low
+        bar.style.height = h.toFixed(0) + '%';
+        setTimeout(tick, 120 + Math.random() * 160);          // 120..280ms, per-bar
+      };
+      setTimeout(tick, idx * 70);
+    });
+  });
+</script>
+</body>
+</html>

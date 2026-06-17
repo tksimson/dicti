@@ -4,5 +4,5 @@
   "description": "Single top-bar indicator for the dicti dictation daemon. Shows idle / listening / transcribing and toggles dictation. Reads $XDG_RUNTIME_DIR/dictation.state; left-click toggles, right-click opens a menu.",
   "shell-version": ["45", "46", "47", "48"],
   "url": "https://github.com/tksimson/dicti",
-  "version": 1
+  "version": 2
 }

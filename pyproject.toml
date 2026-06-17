@@ -27,3 +27,7 @@ dicti-indicator = "dicti.indicator:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Ship the brand state icons used by the AppIndicator (KDE/other desktops).
+dicti = ["icons/*.svg"]

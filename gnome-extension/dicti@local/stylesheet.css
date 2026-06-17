@@ -1,4 +1,8 @@
-/* Red tint for the microphone icon while actively listening. */
-.dicti-listening {
-    color: #e01b24;
+/* The icon is a custom Cairo-drawn bar widget (see extension.js); colors and
+   animation live there. This just reserves panel space and gives a little
+   horizontal breathing room. */
+.dicti-bars {
+    width: 22px;
+    height: 16px;
+    margin: 0 2px;
 }
