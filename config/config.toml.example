@@ -53,3 +53,9 @@ paste_keys = "auto"          # paste shortcut for non-ASCII: "auto" (terminals g
 preserve_clipboard = true    # restore your clipboard after a paste. Set false to instead
                              # leave the transcript on the clipboard as a re-paste safety net.
 key_delay_ms = 0             # inter-key delay when typing; 0 = fastest
+
+# --- Notifications ---
+# The animated panel icon already shows idle/listening/transcribing, so the old
+# per-dictation "done" popups were just noise (and lit the clock's unread dot).
+notify_level = "error"       # "error" = only failures (default) | "off" = silent |
+                             # "all" = also routine status (done / empty / busy / cancelled)

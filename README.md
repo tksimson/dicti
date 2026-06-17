@@ -1,8 +1,19 @@
-# dicti
+<p align="center">
+  <img src="branding/dicti-tile.png" width="92" alt="dicti">
+</p>
 
-Local, offline live dictation for Linux. Tap a key, talk, and your words appear as you
-speak, transcribed by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on your own
-machine and typed into whatever window has focus. No cloud, no account, no network.
+<h1 align="center">dicti</h1>
+
+<p align="center">
+  Local, offline live dictation for Linux. Tap a key, talk, and your words appear as you
+  speak, transcribed by <a href="https://github.com/ggerganov/whisper.cpp">whisper.cpp</a>
+  on your own machine and typed into whatever window has focus. No cloud, no account, no network.
+</p>
+
+<p align="center">
+  <img src="branding/dicti-demo.gif" width="360"
+       alt="dicti panel indicator cycling through ready, listening and transcribing">
+</p>
 
 I built this because I was used to a good dictation app on the Mac and wanted the same thing
 on Linux. Tested on Debian + GNOME (X11).
@@ -22,9 +33,13 @@ on Linux. Tested on Debian + GNOME (X11).
   stock "thanks for watching" guesses on pauses never reach the screen.
 - Fully offline: whisper.cpp medium model, GPU-accelerated via Vulkan.
 - Long sessions (1-hour cap) with silence auto-stop after a few minutes of real quiet.
-- Universal insertion: types the transcript with `ydotool`, so it works in plain editors,
-  IDEs and terminals alike. The transcript is also left on the clipboard as a safety net.
-- A single top-bar indicator (GNOME Shell extension): idle / listening / transcribing.
+- Universal insertion: ASCII is typed via `ydotool`; accented/non-ASCII text (Polish
+  ąęóśżźćń, etc.) is pasted via the clipboard, so it works across editors, IDEs and
+  terminals. The transcript is also left on the clipboard as a safety net. (One gap:
+  integrated terminals in Zed/VS Code don't accept pasted accented text yet, see
+  [Display servers & support tiers](#display-servers--support-tiers).)
+- A single **animated** top-bar indicator (GNOME Shell extension): a bar glyph that bounces
+  while listening and fills while transcribing. Quiet by default, no per-dictation popups.
 - Multilingual auto-detect (e.g. English + Polish).
 
 ## How it works
@@ -54,11 +69,27 @@ Two user services (`whisper-server`, `dictation`) plus the GNOME Shell extension
   only ASCII: `xclip` + `xprop` on X11, or `wl-clipboard` on Wayland. The installer pulls in
   all of them.
 
-## Display servers
+## Display servers & support tiers
 
-- **X11 + GNOME**: tested, the primary target.
-- **Wayland (GNOME/KDE)**: supported; non-ASCII inserts via `wl-clipboard` + paste.
-- **wlroots (Sway/Hyprland)**: native Unicode typing via `wtype` if installed.
+This is a young project and these tiers are honest about what's actually been tested. Help
+moving things up the list is very welcome.
+
+**Tier 1: tested, supported**
+- GNOME on **Xorg** (Shell 48). The primary target, used daily.
+
+**Tier 2: should work, not yet verified (testers wanted)**
+- **wlroots Wayland** (Sway/Hyprland): native Unicode typing via `wtype`.
+- Other **X11 desktops** (KDE/XFCE): the clipboard insertion path is desktop-agnostic; the
+  tray uses the AppIndicator service (`dicti-indicator`) instead of the GNOME extension.
+- **GNOME on Wayland**: the pieces are Wayland-safe (keyd hotkey, `ydotool`/uinput,
+  `wl-clipboard`), but the end-to-end path is unproven.
+
+**Known gaps**
+- Integrated terminals in **Zed / VS Code** reject pasted accented text. They share one
+  window for the editor and terminal panes, so the paste shortcut can't be auto-targeted
+  from outside. ASCII/English works there; Polish/French/German in those terminals does not
+  yet. Everywhere else (browsers, editors, native apps, standalone terminals like
+  gnome-terminal or kitty), full Unicode works.
 
 See `specs/0001-text-insertion.md` for why insertion works this way (no tool types arbitrary
 Unicode into every Linux app, so the portable path is type-ASCII + paste-Unicode).
@@ -92,8 +123,9 @@ find its `KEY_*` name and edit `keyd/default.conf`.
 Copy and edit `~/.config/dicti/config.toml` (the installer seeds one from
 [`config/config.toml.example`](config/config.toml.example)): `mode` (`streaming` or
 `batch`) and the streaming phrase tuning, `silence_timeout_sec`, `max_record_sec`,
-`language`, `paste_method`, the silence thresholds, and the transcript cleanup flags.
-Restart after editing: `systemctl --user restart dictation`.
+`language`, `insert_backend` / `paste_keys` (text insertion), `notify_level`
+(`error` by default, or `off` / `all`), the silence thresholds, and the transcript cleanup
+flags. Restart after editing: `systemctl --user restart dictation`.
 
 Tip: whisper transcribes one language per pass. `language = "auto"` works well for mixed
 use now that streaming keeps full context, but if a quiet or ambiguous voice gets detected
