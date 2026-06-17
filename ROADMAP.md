@@ -72,8 +72,11 @@ Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
   (e.g. `START_NEWFILE`).
 - **Insertion backends** (spec 0001, v1 shipped): pluggable `clipboard` (X11 + Wayland via
   `wl-clipboard`) / `wtype` (wlroots) / `ydotool`. Next: validate on real Wayland/wlroots
-  hardware, then the **IBus engine** (spec 0002) as the premium, paste-shortcut-free path,
-  gated on zero-config activation + transparent passthrough.
+  hardware. (The **IBus engine**, spec 0002, was spiked and **rejected**: it broke the user's
+  Polish XKB layout and still could not inject into Zed's non-standard terminal.)
+- **Integrated terminals** (Zed/VS Code custom terminals) reject external text injection by
+  any method (clipboard Ctrl+V and IBus both fail). Not fixable from dicti's side; the
+  practical lever is `paste_keys = "ctrl+shift+v"` per the spec, or dictate into a standard app.
 - **Non-PipeWire** audio fallback (ALSA/`arecord`).
 - **Non-systemd** init support; packaging as **pipx**, **.deb**, and **AUR**.
 - **Other desktops** (KDE/Plasma indicator, generic tray).
