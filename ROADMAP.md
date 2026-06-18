@@ -108,36 +108,27 @@ Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
 - **Language preferences pane**: pick which Whisper languages to use (e.g. Polish +
   English), with optional per-session lock for soft/ambiguous audio.
 
-## Direction under exploration: dictation history & re-paste
+## Ideas to weigh later (not soon)
 
-dicti owns something no clipboard manager does, the dictation stream, and already keeps the
-last transcript (`bin/dictate-last`, `~/.cache/dicti/last.txt`). Growing that into a searchable
-history extends the project's "never lose your words" theme. Phased so the lean, on-brand value
-lands first and the ambitious part stays a deliberate decision, not a drift.
+Worth holding, not building yet. dicti owns something no clipboard manager does, the dictation
+stream, and already keeps the last transcript (`bin/dictate-last`, `~/.cache/dicti/last.txt`).
+A few directions grow from that. None is v0.4. The standing threat is feature creep, so the
+guiding principle is **doing less, better**: the bar for adding any of this is whether it makes
+the core (best-in-class Linux dictation) *better*, not just *bigger*.
 
-- **Dictation history** (cheap, high-value): persist the last N dictations (JSONL or SQLite
-  under `~/.local/share/dicti/`), exposed via CLI (`dictate-history`, `dictate-last --list`) and
-  a "Recent" submenu on the indicator, click to re-paste/re-type. No heavy GUI.
-- **Variations per utterance** (differentiated): dicti produces both the live-streamed text and
-  the full-context "perfect" version of each utterance. Keeping these (and alternative passes)
-  lets you pick the best rendering of the same dictation, something that falls straight out of
-  how dicti works and no clipboard tool can replicate.
-- **Searchable picker**: surface history through a fuzzy finder (rofi/wofi/fzf), re-paste by
-  selection. Composable and lightweight, instead of a bespoke browser.
-- **Clipboard alongside (evaluate carefully)**: a unified dictation + clipboard history is the
-  user-facing ask, but clipboard management is a crowded, solved space (CopyQ, GPaste, Clipboard
-  Indicator). Lean toward *integrating with* an existing clipboard manager, or surfacing
-  clipboard only where it clearly adds value, rather than rebuilding one. The dictation half is
-  the moat; the clipboard half is table stakes.
-
-Open question, flagged honestly: a history browser shifts dicti from "invisible dictation
-daemon" toward "dictation productivity app", which tensions with the lean non-goal below. Decide
-deliberately before building the browser.
+- **Dictation history**: keep recent dictations so you can re-paste them. Open question on
+  scope, just the **last ~10** on the indicator menu (small, lean), or a **searchable library**
+  of everything you've dictated (more powerful, more app). Start small, if at all.
+- **Variations per utterance**: dicti produces both the live-streamed text and the full-context
+  "perfect" version of each utterance; keeping those lets you pick the best rendering. This one
+  is genuinely differentiated, it falls out of how dicti already works.
+- **Clipboard + dictation together**: an open question, not a decision. Whether to grow a
+  clipboard history *into* dicti, or keep dicti and a dedicated clipboard manager (CopyQ,
+  GPaste, Clipboard Indicator) **separate** and let each do one thing well. Weigh this only
+  if/when the dictation history proves its worth.
 
 ## Non-goals
 
 - Cloud/online transcription. dicti is offline by design.
-- A heavyweight GUI app. It stays a lean daemon + tray indicator (history, if it lands, rides
-  the menu + a fuzzy finder, not a bespoke UI).
-- Rebuilding a general clipboard manager. If clipboard history lands, integrate with the
-  mature tools rather than compete with CopyQ/GPaste on commodity ground.
+- A heavyweight GUI app. It stays a lean daemon + tray indicator; anything like history would
+  ride the menu + a fuzzy finder before it ever became a bespoke UI.
