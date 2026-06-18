@@ -21,6 +21,7 @@ apt update
 apt install -y \
   keyd \
   ydotool \
+  pipewire-bin \
   wev \
   evtest \
   libnotify-bin \

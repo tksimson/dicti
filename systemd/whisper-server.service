@@ -6,9 +6,10 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 # Vulkan ACL on /dev/dri/renderD128 is applied by systemd-logind asynchronously
-# with graphical-session.target. Probe until vulkaninfo sees the GPU (max 30s)
-# so we never silently fall back to CPU.
-ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do vulkaninfo --summary 2>/dev/null | grep -q PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && exit 0; sleep 1; done; exit 1'
+# with graphical-session.target. Probe until vulkaninfo sees a usable GPU (max
+# 30s) so we never silently fall back to CPU. Match integrated, discrete and
+# virtual GPUs (not just integrated).
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do vulkaninfo --summary 2>/dev/null | grep -qE "PHYSICAL_DEVICE_TYPE_(INTEGRATED|DISCRETE|VIRTUAL)_GPU" && exit 0; sleep 1; done; exit 1'
 ExecStart=%h/opt/whisper.cpp/build/bin/whisper-server \
   --model %h/opt/whisper.cpp/models/ggml-medium-q5_0.bin \
   --host 127.0.0.1 \

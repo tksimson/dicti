@@ -52,10 +52,11 @@ to kick the tires, file issues, or help push it further.
 > **Status:** v0.3.5 (alpha). Live streaming dictation that works well day to day. Tested on
 > Debian + GNOME (X11). See the [roadmap](ROADMAP.md) for what's next.
 
-## The whole UI is one glyph
+## Calm by design
 
-No window, no panel, no settings to babysit. A single animated mark lives by your clock and
-tells you everything: green at rest, pink while it listens, a green sweep while it transcribes.
+dicti stays out of your way. A single animated mark by your clock tells you everything at a
+glance: green at rest, pink while it listens, a green sweep while it transcribes. No floating
+windows, no notification on every word.
 
 <p align="center">
   <img src="branding/dicti-panel-states.svg" width="560"
@@ -74,12 +75,14 @@ tells you everything: green at rest, pink while it listens, a green sweep while 
 - **No "thanks for watching" on silence.** whisper-server runs with voice-activity detection
   (padded so it never clips your first word), and the stabilise-across-passes rule is a second
   filter, so the classic silence hallucinations never reach the screen.
-- **Types anywhere.** ASCII goes in via `ydotool`; accented text (Polish ąęóśżźćń, etc.) is
-  pasted via the clipboard, so it works across editors, IDEs and terminals. Your transcript is
-  also left on the clipboard as a safety net.
-- **Multilingual.** Auto-detects per pass (e.g. English + Polish), or pin a language.
-- **Quiet by default.** The top-bar glyph (above) is the only UI. No popup spam, no tray
-  clutter, no notification on every word.
+- **Speaks ~100 languages.** It's Whisper underneath, so whatever Whisper can transcribe, dicti
+  types. It auto-detects the language each pass (handy when you switch mid-flow), or you can pin
+  one in the config.
+- **Types anywhere.** ASCII goes in via `ydotool`; any non-ASCII (accents, Polish ąęóśżźćń, CJK,
+  emoji) is pasted via the clipboard, so it works across editors, IDEs and terminals. Your
+  transcript is also left on the clipboard as a safety net.
+- **Quiet by default.** No popup spam, no tray clutter, no notification on every word. The
+  top-bar glyph (above) is all you normally see.
 - **Yours, offline.** whisper.cpp medium model, GPU-accelerated via Vulkan. Long sessions
   (1-hour cap) with a smart silence auto-stop.
 
@@ -152,8 +155,8 @@ seeds one from [`config/config.toml.example`](config/config.toml.example)), then
 | `insert_backend` / `paste_keys` | text insertion path and paste shortcut |
 | `notify_level` | `error` (default), `off`, or `all` |
 
-> **Tip:** whisper transcribes one language per pass. `auto` works well for mixed use now that
-> streaming keeps full context, but pin it (e.g. `language = "pl"`) if a quiet voice gets
+> **Tip:** Whisper transcribes one language per pass. `auto` works well for mixed use now that
+> streaming keeps full context, but pin `language` to your main one if a quiet voice gets
 > detected wrong.
 
 ## Compatibility

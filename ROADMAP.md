@@ -1,69 +1,14 @@
 # dicti Roadmap
 
-dicti is a local, offline live-dictation tool for Linux. The aim: the
-best-in-class push-to-talk dictation experience on Linux, GNOME first, then
-broader desktops and distros.
+dicti is a local, offline live-dictation tool for Linux. The aim: the best-in-class
+push-to-talk dictation experience on Linux, GNOME first, then broader desktops and distros.
 
-## v0.2, Daily-driver fixes (shipped)
+**You are here:** v0.3.5 shipped, live streaming, a calm animated indicator, and settled text
+insertion. v0.4 is next. The full shipped history is folded in at the bottom.
 
-The everyday-pain release. All shipped:
+> v0.2 daily-driver fixes &rarr; v0.3 live streaming + VAD &rarr; v0.3.5 identity & calm &rarr; **v0.4 word-level refinement (next)**
 
-- **Long sessions**, `max_record_sec` raised to 1 hour (was a 60s hard cap that
-  cut people off mid-sentence).
-- **Silence auto-stop**, a monitor samples the recording's RMS and stops after
-  `silence_timeout_sec` (default 180s) of real silence, instead of a blind timer.
-- **Universal text insertion**, transcript is typed via `ydotool type` (works in
-  plain editors, IDEs, terminals; no Markdown-render-on-paste), clipboard kept as
-  a safety net.
-- **Subtle tray indicator**, top-bar AppIndicator with idle / listening /
-  transcribing states; the "listening" popup is gone.
-- **Config file**, `~/.config/dicti/config.toml` for timeouts, language, insertion
-  method and silence thresholds.
-- **Repo**, became the public MIT project (ported from a private prototype).
-
-## v0.3, Live streaming with VAD (shipped)
-
-Goal met: text appears **as you speak** while keeping batch-grade quality.
-
-- **Growing-window streaming**, each pass (every `stream_interval_sec`) re-transcribes the
-  whole utterance so far, so whisper always has full context (= batch quality), and types
-  only the words that have **stabilised** across passes. **Append-only**: it never
-  backspaces, so it can't corrupt text behind the cursor if focus moves. `max_context_sec`
-  bounds the per-pass cost on long dictations.
-- **Server-side VAD, tuned for onsets** (`--vad-threshold 0.25 --vad-speech-pad-ms 500`),
-  rejects silence (no hallucinations, no runaway session) while the generous padding keeps
-  the first word after a pause, which a tighter VAD trims on a low-output mic. The
-  stabilise-across-passes rule is a second line of defence.
-- **Non-ASCII insertion**, ASCII is typed via ydotool; text with Polish/accented characters
-  is inserted byte-exact via the clipboard (ydotool 1.x cannot type non-ASCII keycodes).
-- **Capture-live gate**, the red indicator waits until pw-record is actually recording, so a
-  fast speaker doesn't lose their first word.
-- **Batch mode kept** as a one-line config fallback (`mode = "batch"`).
-
-Found along the way: chunked streaming destroyed whisper's context and tanked quality
-(reverted to the growing-window design above); a tight VAD trims quiet speech onsets while
-no VAD lets silence hallucinations run away (settled on a loosely-padded VAD); and xdotool's
-Unicode typing can deadlock X (use clipboard for non-ASCII instead).
-
-## v0.3.5, Identity & calm (shipped)
-
-The "looks like a real product" release.
-
-- **Animated bar indicator**, the GNOME Shell extension draws a custom five-bar glyph (Cairo):
-  static "mic" trapezoid when idle, an organic equalizer bounce while listening, a
-  left-to-right fill while transcribing, in the deep-green + pink brand colors. The animation
-  timer runs only while active, so idle costs nothing. Matching static SVGs back the optional
-  AppIndicator on KDE/other desktops. Brand assets + a demo GIF now front the README.
-- **Quiet by default**, new `notify_level` config (`error` default | `off` | `all`) removes the
-  per-dictation "done"/status popups (which also lit GNOME's unread-notification dot); only
-  genuine failures (transcription error, whisper-on-CPU) notify.
-- **Insertion backends settled** (spec 0001): clipboard default everywhere, `wtype` on wlroots,
-  `ydotool` ASCII fallback, documented as honest support tiers (GNOME/Xorg tested; wlroots /
-  other X11 / GNOME-Wayland testers-wanted).
-- **Input-method fix**, documented that GNOME-Xorg + IBus is the native stack and Polish =
-  the `pl` "programmers" XKB layout (the rejected IBus spike, spec 0002, had left it broken).
-
-## v0.4, Word-level refinement & polish (next)
+## Next: v0.4, Word-level refinement & polish
 
 Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
 
@@ -80,7 +25,7 @@ Build on the streaming loop toward macOS-grade, **self-correcting** dictation.
 - **Smart line breaks**: detect real sentence/paragraph boundaries and insert newlines
   deliberately, instead of v0.2.1's blanket newline-collapse.
 
-## Future, Reach & polish
+## Later: reach & polish
 
 - **Capture-to-file mode**: hold Shift when starting/stopping a recording to send the
   transcript to a **new file** instead of typing into the focused window, with a save
@@ -132,3 +77,79 @@ the core (best-in-class Linux dictation) *better*, not just *bigger*.
 - Cloud/online transcription. dicti is offline by design.
 - A heavyweight GUI app. It stays a lean daemon + tray indicator; anything like history would
   ride the menu + a fuzzy finder before it ever became a bespoke UI.
+
+## Shipped so far
+
+<details>
+<summary><b>v0.3.5</b> &middot; Identity & calm: animated brand indicator, quiet by default, insertion backends settled</summary>
+
+<br>
+
+The "looks like a real product" release.
+
+- **Animated bar indicator**, the GNOME Shell extension draws a custom five-bar glyph (Cairo):
+  static "mic" trapezoid when idle, an organic equalizer bounce while listening, a
+  left-to-right fill while transcribing, in the deep-green + pink brand colors. The animation
+  timer runs only while active, so idle costs nothing. Matching static SVGs back the optional
+  AppIndicator on KDE/other desktops. Brand assets + a demo GIF now front the README.
+- **Quiet by default**, new `notify_level` config (`error` default | `off` | `all`) removes the
+  per-dictation "done"/status popups (which also lit GNOME's unread-notification dot); only
+  genuine failures (transcription error, whisper-on-CPU) notify.
+- **Insertion backends settled** (spec 0001): clipboard default everywhere, `wtype` on wlroots,
+  `ydotool` ASCII fallback, documented as honest support tiers (GNOME/Xorg tested; wlroots /
+  other X11 / GNOME-Wayland testers-wanted).
+- **Input-method fix**, documented that GNOME-Xorg + IBus is the native stack and Polish =
+  the `pl` "programmers" XKB layout (the rejected IBus spike, spec 0002, had left it broken).
+
+</details>
+
+<details>
+<summary><b>v0.3</b> &middot; Live streaming with VAD: text appears as you speak, at batch-grade quality</summary>
+
+<br>
+
+Goal met: text appears **as you speak** while keeping batch-grade quality.
+
+- **Growing-window streaming**, each pass (every `stream_interval_sec`) re-transcribes the
+  whole utterance so far, so whisper always has full context (= batch quality), and types
+  only the words that have **stabilised** across passes. **Append-only**: it never
+  backspaces, so it can't corrupt text behind the cursor if focus moves. `max_context_sec`
+  bounds the per-pass cost on long dictations.
+- **Server-side VAD, tuned for onsets** (`--vad-threshold 0.25 --vad-speech-pad-ms 500`),
+  rejects silence (no hallucinations, no runaway session) while the generous padding keeps
+  the first word after a pause, which a tighter VAD trims on a low-output mic. The
+  stabilise-across-passes rule is a second line of defence.
+- **Non-ASCII insertion**, ASCII is typed via ydotool; text with Polish/accented characters
+  is inserted byte-exact via the clipboard (ydotool 1.x cannot type non-ASCII keycodes).
+- **Capture-live gate**, the red indicator waits until pw-record is actually recording, so a
+  fast speaker doesn't lose their first word.
+- **Batch mode kept** as a one-line config fallback (`mode = "batch"`).
+
+Found along the way: chunked streaming destroyed whisper's context and tanked quality
+(reverted to the growing-window design above); a tight VAD trims quiet speech onsets while
+no VAD lets silence hallucinations run away (settled on a loosely-padded VAD); and xdotool's
+Unicode typing can deadlock X (use clipboard for non-ASCII instead).
+
+</details>
+
+<details>
+<summary><b>v0.2</b> &middot; Daily-driver fixes: long sessions, silence auto-stop, universal insertion</summary>
+
+<br>
+
+The everyday-pain release. All shipped:
+
+- **Long sessions**, `max_record_sec` raised to 1 hour (was a 60s hard cap that
+  cut people off mid-sentence).
+- **Silence auto-stop**, a monitor samples the recording's RMS and stops after
+  `silence_timeout_sec` (default 180s) of real silence, instead of a blind timer.
+- **Universal text insertion**, transcript is typed via `ydotool type` (works in
+  plain editors, IDEs, terminals; no Markdown-render-on-paste), clipboard kept as
+  a safety net.
+- **Subtle tray indicator**, top-bar AppIndicator with idle / listening /
+  transcribing states; the "listening" popup is gone.
+- **Config file**, `~/.config/dicti/config.toml` for timeouts, language, insertion
+  method and silence thresholds.
+- **Repo**, became the public MIT project (ported from a private prototype).
+
+</details>
