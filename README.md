@@ -67,21 +67,19 @@ windows, no notification on every word.
 
 ## What it does
 
-- **Talk and watch it appear.** Live streaming: text shows up as you speak. Each pass
-  re-transcribes the whole utterance so whisper always has full context (quality matches
+- **Click and Talk.** Live streaming: text shows up as you speak. Each pass
+  re-transcribes the whole thing, so whisper always has full context (quality matches
   one-shot batch mode), and only words that have stabilised across passes get typed. It's
-  append-only, so it never rewrites text behind your cursor. Prefer all-at-once?
-  `mode = "batch"` is one line.
-- **No "thanks for watching" on silence.** whisper-server runs with voice-activity detection
-  (padded so it never clips your first word), and the stabilise-across-passes rule is a second
+  append-only, so it never rewrites text behind your cursor. To switch to all-at-once:
+  change `mode = "batch"`.
+- **No halucinations on silence.** whisper-server runs with voice-activity detection
+  (padded to not clip the first word), and the stabilise-across-passes rule is a second
   filter, so the classic silence hallucinations never reach the screen.
 - **Speaks ~100 languages.** It's Whisper underneath, so whatever Whisper can transcribe, dicti
-  types. It auto-detects the language each pass (handy when you switch mid-flow), or you can pin
-  one in the config.
+  types. It auto-detects the language each pass, or you can pin one in config.
 - **Types anywhere.** ASCII goes in via `ydotool`; any non-ASCII (accents, Polish ąęóśżźćń, CJK,
-  emoji) is pasted via the clipboard, so it works across editors, IDEs and terminals. Your
-  transcript is also left on the clipboard as a safety net.
-- **Quiet by default.** No popup spam, no tray clutter, no notification on every word. The
+  emoji) is pasted via the clipboard, so it works across editors, IDEs and terminals.
+- **Not in your face** No popup spam, no tray clutter, no notification on every word. The
   top-bar glyph (above) is all you normally see.
 - **Yours, offline.** whisper.cpp medium model, GPU-accelerated via Vulkan. Long sessions
   (1-hour cap) with a smart silence auto-stop.
