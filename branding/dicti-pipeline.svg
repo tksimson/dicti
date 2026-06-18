@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="738" height="168" viewBox="0 0 738 168" role="img" aria-label="dicti pipeline: trigger, transcribe offline, insert">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#3c9a5e"/></marker>
+</defs>
+<style>text{font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}</style>
+<line x1="228" y1="84.0" x2="254" y2="84.0" stroke="#3c9a5e" stroke-width="2.2" marker-end="url(#arrow)"/>
+<line x1="484" y1="84.0" x2="510" y2="84.0" stroke="#3c9a5e" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect x="4" y="26" width="218" height="116" rx="12" fill="#1c1c1e" stroke="#34343a"/>
+<rect x="4" y="26" width="6" height="116" rx="3" fill="#3c9a5e"/>
+<circle cx="30" cy="50" r="10" fill="#3c9a5e"/>
+<text x="30" y="54.5" text-anchor="middle" font-size="12" font-weight="700" fill="#0e0e10">1</text>
+<text x="48" y="54.5" font-size="13.5" font-weight="700" fill="#e9e9ec">Trigger</text>
+<text x="24" y="82" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">tap your key</text>
+<text x="24" y="97" font-size="10.5" fill="#9a9aa2">keyd → GNOME shortcut</text>
+<text x="24" y="120" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">dictation daemon</text>
+<text x="24" y="135" font-size="10.5" fill="#9a9aa2">via unix socket</text>
+<rect x="260" y="26" width="218" height="116" rx="12" fill="#1c1c1e" stroke="#34343a"/>
+<rect x="260" y="26" width="6" height="116" rx="3" fill="#e85ba6"/>
+<circle cx="286" cy="50" r="10" fill="#e85ba6"/>
+<text x="286" y="54.5" text-anchor="middle" font-size="12" font-weight="700" fill="#0e0e10">2</text>
+<text x="304" y="54.5" font-size="13.5" font-weight="700" fill="#e9e9ec">Transcribe · offline</text>
+<text x="280" y="82" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">pw-record → WAV</text>
+<text x="280" y="97" font-size="10.5" fill="#9a9aa2">PipeWire capture</text>
+<text x="280" y="120" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">whisper.cpp</text>
+<text x="280" y="135" font-size="10.5" fill="#9a9aa2">Vulkan GPU · on-device</text>
+<rect x="516" y="26" width="218" height="116" rx="12" fill="#1c1c1e" stroke="#34343a"/>
+<rect x="516" y="26" width="6" height="116" rx="3" fill="#3c9a5e"/>
+<circle cx="542" cy="50" r="10" fill="#3c9a5e"/>
+<text x="542" y="54.5" text-anchor="middle" font-size="12" font-weight="700" fill="#0e0e10">3</text>
+<text x="560" y="54.5" font-size="13.5" font-weight="700" fill="#e9e9ec">Insert</text>
+<text x="536" y="82" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">ydotool / clipboard</text>
+<text x="536" y="97" font-size="10.5" fill="#9a9aa2">ASCII typed · Unicode pasted</text>
+<text x="536" y="120" class="mono" font-size="11.5" font-weight="600" fill="#e9e9ec">focused window</text>
+<text x="536" y="135" font-size="10.5" fill="#9a9aa2">append-only, never rewrites</text>
+<text x="369.0" y="161" text-anchor="middle" font-size="11" fill="#9a9aa2">Two user services + a GNOME Shell extension. Nothing leaves your machine.</text>
+</svg>

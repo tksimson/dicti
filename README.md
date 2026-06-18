@@ -1,22 +1,43 @@
+<br>
+
 <p align="center">
-  <img src="branding/dicti-tile.png" width="96" alt="dicti">
+  <img src="branding/dicti-tile.png" width="92" alt="dicti logo">
 </p>
 
 <h1 align="center">dicti</h1>
 
 <p align="center">
-  <b>Local, offline, live dictation for Linux.</b><br>
+  <b>Local, offline, live dictation for Linux.</b>
+</p>
+
+<p align="center">
   Tap a key, talk, and your words appear in whatever window you're using.
 </p>
 
+<br>
+
 <p align="center">
-  <img src="branding/dicti-states.png" width="500"
-       alt="The dicti panel indicator in its three states: ready, listening, transcribing">
+  <img src="branding/dicti-demo.gif" width="640"
+       alt="Dictating into a text editor: words stream in live as the pink top-bar indicator listens">
 </p>
 
 <p align="center">
-  <sub>100% offline · open source (MIT) · GNOME-first</sub>
+  <sub>Real speech, typed into a real editor, fully on-device. No cloud, no account.</sub>
 </p>
+
+<br>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/100%25-offline-3c9a5e" alt="100% offline">
+  &nbsp;
+  <img src="https://img.shields.io/badge/license-MIT-3c9a5e" alt="MIT license">
+  &nbsp;
+  <img src="https://img.shields.io/badge/v0.3.5-alpha-e85ba6" alt="version 0.3.5 alpha">
+  &nbsp;
+  <img src="https://img.shields.io/badge/Linux-GNOME--first-2f7a4a" alt="Linux, GNOME first">
+</p>
+
+<br>
 
 ## Hey, glad you're here
 
@@ -24,33 +45,57 @@ dicti transcribes your speech on your **own machine** with
 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and types it into the focused window
 as you talk. No cloud, no account, nothing leaves your laptop.
 
-I built it because I missed having great dictation like on the Mac, and Linux deserved one
-too. It's what I use every day. It's young and honest about its rough edges, and you're very
-welcome to kick the tires, file issues, or help push it further.
+I built it because I missed the great dictation I had on the Mac, and Linux deserved one too.
+It's what I use every day. It's young and honest about its rough edges, and you're very welcome
+to kick the tires, file issues, or help push it further.
 
 > **Status:** v0.3.5 (alpha). Live streaming dictation that works well day to day. Tested on
 > Debian + GNOME (X11). See the [roadmap](ROADMAP.md) for what's next.
 
+## The whole UI is one glyph
+
+No window, no panel, no settings to babysit. A single animated mark lives by your clock and
+tells you everything: green at rest, pink while it listens, a green sweep while it transcribes.
+
+<p align="center">
+  <img src="branding/dicti-panel-states.svg" width="560"
+       alt="The dicti indicator in the GNOME top bar, animating through its three states: idle, listening, transcribing">
+</p>
+
+<br>
+
 ## What it does
 
 - **Talk and watch it appear.** Live streaming: text shows up as you speak. Each pass
-  re-transcribes the whole utterance so whisper always has full context (so quality matches
+  re-transcribes the whole utterance so whisper always has full context (quality matches
   one-shot batch mode), and only words that have stabilised across passes get typed. It's
-  append-only, so it never rewrites text behind your cursor. Prefer all-at-once? `mode =
-  "batch"` is one line.
+  append-only, so it never rewrites text behind your cursor. Prefer all-at-once?
+  `mode = "batch"` is one line.
 - **No "thanks for watching" on silence.** whisper-server runs with voice-activity detection
-  (padded so it never clips your first word), and the stabilise-across-passes rule is a
-  second filter, so the classic silence hallucinations never reach the screen.
+  (padded so it never clips your first word), and the stabilise-across-passes rule is a second
+  filter, so the classic silence hallucinations never reach the screen.
 - **Types anywhere.** ASCII goes in via `ydotool`; accented text (Polish ąęóśżźćń, etc.) is
-  pasted via the clipboard, so it works across editors, IDEs and terminals. Your transcript
-  is also left on the clipboard as a safety net.
+  pasted via the clipboard, so it works across editors, IDEs and terminals. Your transcript is
+  also left on the clipboard as a safety net.
 - **Multilingual.** Auto-detects per pass (e.g. English + Polish), or pin a language.
-- **A calm little indicator.** One animated top-bar glyph: a mic at rest, bouncing bars while
-  it listens, a filling sweep while it transcribes. Quiet by default, no popup spam.
+- **Quiet by default.** The top-bar glyph (above) is the only UI. No popup spam, no tray
+  clutter, no notification on every word.
 - **Yours, offline.** whisper.cpp medium model, GPU-accelerated via Vulkan. Long sessions
   (1-hour cap) with a smart silence auto-stop.
 
 ## How it works
+
+<p align="center">
+  <img src="branding/dicti-pipeline.svg" width="740"
+       alt="dicti pipeline: a key tap reaches the dictation daemon, PipeWire records audio, whisper.cpp transcribes it offline on the GPU, and the text is typed or pasted into the focused window">
+</p>
+
+Two small user services (`whisper-server`, `dictation`) plus a GNOME Shell extension
+(`dicti@local`) for the indicator. The daemon mirrors its state to
+`$XDG_RUNTIME_DIR/dictation.state` so the indicator can follow along.
+
+<details>
+<summary>The full path, step by step</summary>
 
 ```
 [your key] -> keyd -> Super+Shift+Alt+F12 -> GNOME shortcut -> dictate-toggle
@@ -58,16 +103,18 @@ welcome to kick the tires, file issues, or help push it further.
    -> HTTP -> whisper-server (Vulkan) -> transcript -> ydotool / clipboard -> focused window
 ```
 
-Two small user services (`whisper-server`, `dictation`) plus a GNOME Shell extension
-(`dicti@local`) for the indicator. The daemon mirrors its state to
-`$XDG_RUNTIME_DIR/dictation.state` so the indicator can follow along. For *why* insertion
-works the type-ASCII / paste-Unicode way, see [`specs/0001-text-insertion.md`](specs/0001-text-insertion.md).
+For *why* insertion works the type-ASCII / paste-Unicode way, see
+[`specs/0001-text-insertion.md`](specs/0001-text-insertion.md).
+
+</details>
 
 ## Quick start
 
-You'll need a Debian/Ubuntu-family distro (apt) with PipeWire audio, a Vulkan-capable GPU
-(integrated is fine; CPU works but is ~4-5x slower), and GNOME Shell (tested on 48) for the
-indicator.
+You'll need:
+
+- A Debian/Ubuntu-family distro (apt) with **PipeWire** audio
+- A **Vulkan-capable GPU** (integrated is fine; CPU works but is ~4-5x slower)
+- **GNOME Shell** (tested on 48) for the top-bar indicator
 
 ```bash
 git clone https://github.com/tksimson/dicti.git
@@ -77,9 +124,8 @@ bash install/install.sh
 
 The guided installer runs the phases in order: system packages, the keyd key remap, building
 whisper.cpp and fetching the model, the user services, ydotool, the GNOME shortcut, and the
-indicator extension. You'll be asked to log out and back in once after the first phase so
-your `input`-group membership takes effect. Each phase under `install/00..07` also runs on its
-own.
+indicator extension. You'll be asked to log out and back in once after the first phase so your
+`input`-group membership takes effect. Each phase under `install/00..07` also runs on its own.
 
 If your dictation key isn't a Copilot/AI key, run `sudo evtest` (or `wev` on Wayland) to find
 its `KEY_*` name and edit `keyd/default.conf`.
@@ -106,27 +152,27 @@ seeds one from [`config/config.toml.example`](config/config.toml.example)), then
 | `insert_backend` / `paste_keys` | text insertion path and paste shortcut |
 | `notify_level` | `error` (default), `off`, or `all` |
 
-Tip: whisper transcribes one language per pass. `auto` works well for mixed use now that
-streaming keeps full context, but pin it (e.g. `language = "pl"`) if a quiet voice gets
-detected wrong.
+> **Tip:** whisper transcribes one language per pass. `auto` works well for mixed use now that
+> streaming keeps full context, but pin it (e.g. `language = "pl"`) if a quiet voice gets
+> detected wrong.
 
 ## Compatibility
 
-dicti is young, so these tiers are honest about what's actually been tested. Help moving
-things up the list is very welcome.
+dicti is young, so this is honest about what's actually been tested. Help moving things up the
+list is very welcome.
 
-- **Tier 1, tested and supported:** GNOME on **Xorg** (Shell 48). The primary target, used
-  daily.
-- **Tier 2, should work, not yet verified (testers wanted):** wlroots Wayland (Sway/Hyprland,
-  native Unicode via `wtype`); other X11 desktops (KDE/XFCE, via the clipboard path + the
-  AppIndicator service); GNOME on Wayland (the pieces are Wayland-safe but the end-to-end
-  path is unproven).
-- **Known gap:** integrated terminals in **Zed / VS Code** don't accept pasted accented text
-  yet (they share one window for editor and terminal, so the paste shortcut can't be
-  auto-targeted). ASCII/English works there; everywhere else (browsers, editors, native apps,
-  standalone terminals like gnome-terminal or kitty) full Unicode works.
+| Environment | Status | Notes |
+| --- | --- | --- |
+| **GNOME / Xorg** (Shell 48) | ✅ Tested, daily driver | The primary target. |
+| wlroots Wayland (Sway/Hyprland) | 🚧 Should work, testers wanted | Native Unicode via `wtype`. |
+| KDE / XFCE and other X11 | 🚧 Should work, testers wanted | Clipboard path + AppIndicator service. |
+| GNOME / Wayland | 🚧 Unverified | Pieces are Wayland-safe; full path unproven. |
+| Zed / VS Code integrated terminal | ⚠️ Known gap | Editor and terminal share one window, so the paste shortcut can't be auto-targeted. ASCII/English works; full Unicode works everywhere else (browsers, editors, native apps, standalone terminals). |
 
 ## Troubleshooting
+
+<details>
+<summary>Common fixes</summary>
 
 - **Slow transcription / "Dictation degraded":** whisper-server fell back to CPU. Run
   `systemctl --user restart whisper-server`; check `journalctl --user -u whisper-server`.
@@ -135,6 +181,8 @@ things up the list is very welcome.
 - **No top-bar icon:** reload GNOME Shell (Alt+F2, `r` on X11; log out/in on Wayland), then
   `gnome-extensions enable dicti@local`.
 - **Live logs:** `journalctl --user -u dictation -u whisper-server -f`.
+
+</details>
 
 ## Roadmap & contributing
 
