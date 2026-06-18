@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  Tap a key, talk, and your words appear in whatever window you're using.
+  Tap key, talk, starts typing in your active window.
 </p>
 
 <br>
