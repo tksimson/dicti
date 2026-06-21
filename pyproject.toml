@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dicti"
-version = "0.3.5"
+dynamic = ["version"]
 description = "Local, offline live dictation for Linux (GNOME), Whisper + push-to-talk"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -24,6 +24,9 @@ indicator = ["PyGObject>=3.42"]
 [project.scripts]
 dicti-daemon = "dicti.daemon:main"
 dicti-indicator = "dicti.indicator:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "dicti.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
