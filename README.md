@@ -4,7 +4,9 @@
   <img src="branding/dicti-tile.png" width="92" alt="dicti logo">
 </p>
 
-<h1 align="center">dicti</h1>
+<h1 align="center">
+  dicti
+</h1>
 
 <p align="center">
   <b>Local, offline, live dictation for Linux.</b>
@@ -21,8 +23,8 @@
        alt="Dictating into a text editor: words stream in live as the pink top-bar indicator listens">
 </p>
 
-<p align="center">
-  <sub>Real speech, typed into a real editor, fully on-device. No cloud, no account.</sub>
+<p align="left">
+  <sub>dicti is fully on-device dictation. No cloud or account needed.</sub>
 </p>
 
 <br>
@@ -39,7 +41,7 @@
 
 <br>
 
-## Hey, glad you're here
+## Hey and welcome 
 
 dicti transcribes your speech on your **own machine** with
 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and types it into the focused window
