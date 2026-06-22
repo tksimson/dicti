@@ -193,7 +193,8 @@ list is very welcome.
 ## Roadmap & contributing
 
 Where it's headed (and what's deliberately *not* in scope) lives in [ROADMAP.md](ROADMAP.md).
-Issues and PRs are welcome, especially Tier 2 test reports from other desktops and distros.
+Issues and PRs are welcome, especially test reports from other desktops and distros.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup, branches, and how to send a PR.
 
 ## License
 
