@@ -3,6 +3,18 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [0.3.6] - 2026-06-22
+
+### Changed
+- **Installer reclaims ~1.5GB.** The full-precision medium model is now deleted after it is
+  quantized to q5_0 (the only model that actually runs), cutting the on-disk model footprint
+  from ~2GB to ~514MB. The installer and README now state the disk (~1GB total) and RAM
+  (~0.5GB, model hot while running) cost up front.
+
+### Internal
+- `__version__` in `dicti/__init__.py` is now the single source of truth; `pyproject.toml`
+  derives its version from it dynamically (`[tool.setuptools.dynamic]`).
+
 ## [0.3.5] - 2026-06-17
 
 ### Added
