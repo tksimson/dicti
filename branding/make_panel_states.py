@@ -64,8 +64,10 @@ def row_center(row):
 
 
 def bars_x():
-    # bars sit just right of the centered clock, like the real panel
-    return STRIP_X + STRIP_W / 2 + 60
+    # bars sit right of the centered clock, like the real panel. The offset
+    # leaves margin for wider fallback fonts (Cantarell is absent on mobile /
+    # GitHub, so the clock renders wider) so the bars never touch the text.
+    return STRIP_X + STRIP_W / 2 + 96
 
 
 def bar_x(i):
