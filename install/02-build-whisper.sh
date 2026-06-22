@@ -17,6 +17,13 @@ VAD_MODEL="ggml-silero-v5.1.2.bin"   # silero VAD; streaming runs whisper-server
 
 mkdir -p "$HOME/opt"
 
+echo "==> Heads-up on disk + memory:"
+echo "    This step downloads the medium Whisper model (~1.5GB) and quantizes it"
+echo "    to ~514MB (the full download is deleted afterward). With the whisper.cpp"
+echo "    build, expect roughly ~1GB left on disk under ~/opt/whisper.cpp."
+echo "    While dicti runs, the quantized model stays hot in RAM (~0.5GB)."
+echo
+
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   echo "==> Cloning whisper.cpp"
   git clone https://github.com/ggerganov/whisper.cpp "$REPO_DIR"
@@ -59,6 +66,14 @@ if [[ ! -f "models/$MODEL_QUANT" ]]; then
   ./build/bin/whisper-quantize "models/$MODEL_BASE" "models/$MODEL_QUANT" q5_0
 else
   echo "    already present"
+fi
+
+# The full-precision base model (~1.5GB) is only needed for the one-time
+# quantization above. Once the q5_0 model (~514MB, the only one that runs)
+# exists, reclaim that space. Re-downloaded automatically if ever needed again.
+if [[ -f "models/$MODEL_QUANT" && -f "models/$MODEL_BASE" ]]; then
+  echo "==> Removing full-precision $MODEL_BASE (~1.5GB); quantized model is all that runs"
+  rm -f "models/$MODEL_BASE"
 fi
 
 echo "==> Fetching VAD model $VAD_MODEL if missing (silero, ~0.9MB)"

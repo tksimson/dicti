@@ -118,6 +118,9 @@ You'll need:
 - A Debian/Ubuntu-family distro (apt) with **PipeWire** audio
 - A **Vulkan-capable GPU** (integrated is fine; CPU works but is ~4-5x slower)
 - **GNOME Shell** (tested on 48) for the top-bar indicator
+- **~1GB disk** for whisper.cpp and the quantized medium model (the ~1.5GB full
+  model is downloaded once to quantize, then deleted). While running, the model
+  stays hot in RAM (~0.5GB) for instant transcription.
 
 ```bash
 git clone https://github.com/tksimson/dicti.git
