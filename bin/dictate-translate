@@ -1,0 +1,6 @@
+#!/bin/sh
+# Toggle dicti's translate-to-English mode (Whisper's built-in translate task).
+# When ON, whatever language you speak is transcribed as English. One-directional:
+# the target is always English (a Whisper model limit, not a setting).
+# Prints the new state (ON/OFF). Bind it to a key for quick switching.
+exec printf 'TRANSLATE' | nc -U -q1 "$XDG_RUNTIME_DIR/dictation.sock"

@@ -140,9 +140,11 @@ its `KEY_*` name and edit `keyd/default.conf`.
 
 - **Tap** your bound key to start listening, **tap again** to transcribe and insert.
 - Pause to think; it won't cut off until a few minutes of real silence.
-- **Left-click** the indicator to toggle, **right-click** for a menu.
+- **Click** the indicator for its menu: Start / Stop dictation and the Translate-to-English switch.
 - From a shell: `dictate-toggle [START|STOP|TOGGLE|CANCEL|STATUS]`.
 - Lost a good dictation? `dictate-last` reprints the last one (`--copy` to clipboard).
+- **Speak any language, type English:** `dictate-translate` toggles Whisper's translate task
+  (bind it to a key). One-directional, English is always the target (a Whisper limit).
 
 ## Configuration
 
@@ -154,6 +156,7 @@ seeds one from [`config/config.toml.example`](config/config.toml.example)), then
 | --- | --- |
 | `mode` | `streaming` (default) or `batch` |
 | `language` | `auto`, or pin like `pl` / `en` for soft/ambiguous audio |
+| `translate` | `false` (default); `true` = transcribe any language to English (startup default for `dictate-translate`) |
 | `silence_timeout_sec` | how long of real silence before auto-stop |
 | `insert_backend` / `paste_keys` | text insertion path and paste shortcut |
 | `notify_level` | `error` (default), `off`, or `all` |

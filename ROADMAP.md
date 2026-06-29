@@ -71,6 +71,11 @@ the core (best-in-class Linux dictation) *better*, not just *bigger*.
   clipboard history *into* dicti, or keep dicti and a dedicated clipboard manager (CopyQ,
   GPaste, Clipboard Indicator) **separate** and let each do one thing well. Weigh this only
   if/when the dictation history proves its worth.
+- **Translation beyond English** (far off): to-English translation shipped, it's free, Whisper's
+  own translate task (`dictate-translate`). The reverse and arbitrary pairs (English -> Polish,
+  Polish -> German) are **not possible with Whisper**, its translate task only ever outputs
+  English. That would need a second, heavy model (NLLB-200, M2M100, or an LLM) and a real
+  dependency. Off the table until the "no new heavy nets" constraint changes.
 
 ## Non-goals
 
@@ -79,6 +84,22 @@ the core (best-in-class Linux dictation) *better*, not just *bigger*.
   ride the menu + a fuzzy finder before it ever became a bespoke UI.
 
 ## Shipped so far
+
+<details>
+<summary><b>v0.3.7</b> &middot; Translate to English + a click-to-open indicator menu</summary>
+
+<br>
+
+- **Translate to English**, speak any language, type English, via Whisper's own built-in
+  translate task. No new model, no new dependency (the medium model already does it). Off by
+  default; flip it with `dictate-translate` (bindable) or the indicator switch. One-directional
+  by design: English is always the target (a Whisper limit). The daemon publishes the flag to a
+  state file so the switch always reflects reality.
+- **Indicator menu opens on click**, no more accidental dictation from a stray click. A single
+  state-aware item reads **Start dictation** when idle and **Stop dictation** while listening
+  (greyed while transcribing), so you can't start twice.
+
+</details>
 
 <details>
 <summary><b>v0.3.5</b> &middot; Identity & calm: animated brand indicator, quiet by default, insertion backends settled</summary>

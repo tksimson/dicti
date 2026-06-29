@@ -3,6 +3,25 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [0.3.7] - 2026-06-29
+
+### Added
+- **Translate to English.** Speak any language, type English, using Whisper's own built-in
+  translate task. No new model, no new dependency: the medium model already ships with it.
+  Off by default; set `translate = true` in config, or toggle it live with the new
+  `dictate-translate` command (bindable to a key) or the **Translate to English** switch in
+  the indicator menu. One-directional by design: the target is always English (a Whisper
+  model limit; reverse/arbitrary language pairs would need a separate translation model).
+- **`dictate-translate`** helper script + a `TRANSLATE` daemon command; the daemon publishes
+  the flag to `$XDG_RUNTIME_DIR/dictation.translate` so the indicator switch always reflects
+  the real state.
+
+### Changed
+- **Indicator menu opens on click; no more accidental dictation.** A click now opens the menu
+  instead of toggling dictation directly. The menu has a single state-aware item, **Start
+  dictation** when idle, **Stop dictation** while listening (greyed during transcription), so
+  you can't start a session twice. (Cancel removed; Stop transcribes and inserts.)
+
 ## [0.3.6] - 2026-06-22
 
 ### Changed

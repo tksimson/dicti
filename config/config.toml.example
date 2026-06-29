@@ -4,6 +4,12 @@
 # --- Whisper backend ---
 whisper_url = "http://127.0.0.1:8178/inference"
 language = "auto"            # "auto", "en", "pl", ... (whisper language code)
+translate = false            # Whisper's translate task: speak ANY language, get ENGLISH text.
+                             #   One-directional: the target is always English (model limit;
+                             #   English -> Polish etc. would need a separate translation model).
+                             #   This is the startup default; toggle live with `dictate-translate`
+                             #   (bindable to a key). Translation quality is rougher than plain
+                             #   transcription, especially on the quantized medium model.
 
 # --- Dictation mode ---
 mode = "streaming"           # "streaming" = text appears phrase-by-phrase as you pause

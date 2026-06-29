@@ -7,8 +7,9 @@
  *   LISTENING  organic equalizer bounce (random walk), pink
  *   PROCESSING left->right "fill" progress, deep green
  *
- * Left-click toggles dictation; right-click opens a Toggle / Cancel menu. No
- * AppIndicator needed, so no other apps' tray icons are pulled in.
+ * A click opens the menu: Start / Stop dictation plus a "Translate to English"
+ * switch (mirrors $XDG_RUNTIME_DIR/dictation.translate). No AppIndicator needed,
+ * so no other apps' tray icons are pulled in.
  *
  * Placed in the CENTRE box (by the clock): GNOME inserts its privacy
  * microphone indicator into the RIGHT box while recording, which shoves the
@@ -80,21 +81,26 @@ class DictiIndicator extends PanelMenu.Button {
         this._area.connect('repaint', a => this._repaint(a));
         this.add_child(this._area);
 
-        const toggleItem = new PopupMenu.PopupMenuItem('Toggle dictation');
-        toggleItem.connect('activate', () => this._send('TOGGLE'));
-        this.menu.addMenuItem(toggleItem);
-        const cancelItem = new PopupMenu.PopupMenuItem('Cancel');
-        cancelItem.connect('activate', () => this._send('CANCEL'));
-        this.menu.addMenuItem(cancelItem);
+        // One item that follows the daemon state: "Start dictation" when idle (sends
+        // START), "Stop dictation" while listening (sends STOP). You can't start twice,
+        // so a single state-aware item is clearer than two. Greyed while transcribing.
+        this._dictateItem = new PopupMenu.PopupMenuItem('Start dictation');
+        this._dictateItem.connect('activate', () =>
+            this._send(this._state === 'IDLE' ? 'START' : 'STOP'));
+        this.menu.addMenuItem(this._dictateItem);
 
-        // Left-click toggles directly; right-click falls through to the menu.
-        this.connect('button-press-event', (_actor, event) => {
-            if (event.get_button() === Clutter.BUTTON_PRIMARY) {
-                this._send('TOGGLE');
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        // Whisper's translate task: speak any language, type English. The switch
+        // reflects the daemon's real state (dictation.translate file), so an external
+        // `dictate-translate` or a config default keeps it in sync. 'toggled' fires on
+        // user click only (programmatic setToggleState doesn't), so no feedback loop.
+        this._translateItem = new PopupMenu.PopupSwitchMenuItem(
+            'Translate to English', false);
+        this._translateItem.connect('toggled', () => this._send('TRANSLATE'));
+        this.menu.addMenuItem(this._translateItem);
+
+        // A click just opens the menu (PanelMenu.Button's default), so dictation is
+        // only ever started/stopped from the explicit menu items, never by a stray click.
 
         this._statePath = GLib.build_filenamev(
             [GLib.get_user_runtime_dir(), 'dictation.state']);
@@ -105,14 +111,42 @@ class DictiIndicator extends PanelMenu.Button {
         } catch (e) {
             logError(e, 'dicti: could not watch state file');
         }
+
+        this._translatePath = GLib.build_filenamev(
+            [GLib.get_user_runtime_dir(), 'dictation.translate']);
+        this._translateFile = Gio.File.new_for_path(this._translatePath);
+        try {
+            this._translateMonitor =
+                this._translateFile.monitor(Gio.FileMonitorFlags.NONE, null);
+            this._translateMonitorId = this._translateMonitor.connect(
+                'changed', () => this._updateTranslate());
+        } catch (e) {
+            logError(e, 'dicti: could not watch translate file');
+        }
+
         // Poll as a safety net (tmpfs inotify can be flaky).
         this._pollId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
             this._update();
+            this._updateTranslate();
             return GLib.SOURCE_CONTINUE;
         });
 
         this._update();
+        this._updateTranslate();
         this._area.queue_repaint();   // draw the idle mark once on startup
+    }
+
+    _updateTranslate() {
+        let on = false;
+        try {
+            const [ok, contents] = GLib.file_get_contents(this._translatePath);
+            if (ok)
+                on = (new TextDecoder().decode(contents)).trim() === 'ON';
+        } catch (e) {
+            // file may not exist yet -> treat as off
+        }
+        if (this._translateItem && this._translateItem.state !== on)
+            this._translateItem.setToggleState(on);
     }
 
     _readState() {
@@ -126,11 +160,22 @@ class DictiIndicator extends PanelMenu.Button {
         return 'IDLE';
     }
 
+    _updateDictateItem() {
+        if (!this._dictateItem)
+            return;
+        // IDLE -> "Start dictation"; LISTENING -> "Stop dictation"; PROCESSING ->
+        // greyed (recording already stopped, transcription in flight, nothing to do).
+        this._dictateItem.label.text =
+            this._state === 'IDLE' ? 'Start dictation' : 'Stop dictation';
+        this._dictateItem.setSensitive(this._state !== 'PROCESSING');
+    }
+
     _update() {
         const state = this._readState();
         if (state === this._state)
             return;                            // no transition: nothing to redraw
         this._state = state;
+        this._updateDictateItem();
         if (state === 'IDLE') {
             this._stopAnim();
             this._area.queue_repaint();
@@ -252,6 +297,12 @@ class DictiIndicator extends PanelMenu.Button {
                 this._monitor.disconnect(this._monitorId);
             this._monitor.cancel();
             this._monitor = null;
+        }
+        if (this._translateMonitor) {
+            if (this._translateMonitorId)
+                this._translateMonitor.disconnect(this._translateMonitorId);
+            this._translateMonitor.cancel();
+            this._translateMonitor = null;
         }
         super.destroy();
     }

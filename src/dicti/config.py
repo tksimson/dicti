@@ -27,6 +27,10 @@ class Config:
     # Whisper backend
     whisper_url: str = "http://127.0.0.1:8178/inference"
     language: str = "auto"  # "auto", "en", "pl", ...
+    translate: bool = False  # Whisper's built-in translate task: ANY language -> English.
+    #                          One-directional (target is always English; this is a model
+    #                          limit, not a setting). Runtime-toggleable via the TRANSLATE
+    #                          socket command (dictate-translate); this is the startup default.
 
     # Dictation mode
     mode: str = "streaming"  # "streaming" (phrase-by-phrase, appears as you pause)

@@ -2,7 +2,8 @@
 """
 dicti, local dictation daemon.
 
-Listens on a unix socket for START / STOP / TOGGLE / CANCEL / STATUS commands.
+Listens on a unix socket for START / STOP / TOGGLE / CANCEL / STATUS / TRANSLATE
+commands.
 On START, records mic audio via pw-record. A background monitor watches the
 recording for sustained silence and auto-stops after `silence_timeout_sec`;
 a `max_record_sec` hard cap is the safety backstop. On STOP, the WAV is POSTed
@@ -51,6 +52,7 @@ if not _XDG:
 
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"
+TRANSLATE_PATH = Path(_XDG) / "dictation.translate"  # "ON"/"OFF", watched by the indicators
 TMP_WAV = Path("/tmp/dictation-record.wav")
 
 SAMPLE_RATE = 16000
@@ -115,6 +117,9 @@ class State:
 class Daemon:
     def __init__(self, cfg: Config | None = None):
         self.cfg = cfg or Config.load()
+        # Whisper translate task (-> English). Mutable at runtime via the TRANSLATE
+        # command; seeded from config so a user can default it on.
+        self.translate = bool(self.cfg.translate)
         self.state = State.IDLE
         self.lock = threading.Lock()
         self.recorder: subprocess.Popen | None = None
@@ -134,6 +139,7 @@ class Daemon:
         log.info("Insertion backend: %s (session=%s)", self.inserter.name,
                  os.environ.get("XDG_SESSION_TYPE", "?"))
         self._write_state()
+        self._write_translate()
 
     # ---- state -------------------------------------------------------------
 
@@ -147,6 +153,14 @@ class Daemon:
             STATE_PATH.write_text(self.state + "\n")
         except Exception as e:
             log.warning("Could not write state file %s: %s", STATE_PATH, e)
+
+    def _write_translate(self) -> None:
+        # Mirror the translate flag so the indicators can show the toggle's real state
+        # (survives an external `dictate-translate` or a config-set startup default).
+        try:
+            TRANSLATE_PATH.write_text(("ON" if self.translate else "OFF") + "\n")
+        except Exception as e:
+            log.warning("Could not write translate file %s: %s", TRANSLATE_PATH, e)
 
     # ---- notifications -----------------------------------------------------
 
@@ -563,10 +577,15 @@ class Daemon:
 
     def _post_inference(self, fileobj) -> str:
         t0 = time.monotonic()
+        data = {"language": self.cfg.language, "response_format": "json"}
+        if self.translate:
+            # whisper-server flips into Whisper's translate task: source audio -> English,
+            # regardless of spoken language. Only English output is possible (model limit).
+            data["translate"] = "true"
         r = requests.post(
             self.cfg.whisper_url,
             files={"file": ("audio.wav", fileobj, "audio/wav")},
-            data={"language": self.cfg.language, "response_format": "json"},
+            data=data,
             timeout=120,
         )
         r.raise_for_status()
@@ -630,6 +649,18 @@ class Daemon:
                     threading.Thread(target=self.cancel, daemon=True).start()
                 elif cmd == "STATUS":
                     conn.send(self.state.encode())
+                elif cmd == "TRANSLATE":
+                    self.translate = not self.translate
+                    self._write_translate()
+                    new = "ON" if self.translate else "OFF"
+                    log.info("Translate-to-English: %s", new)
+                    self.notify(
+                        f"Translate -> English: {new}",
+                        "Speech is transcribed to English." if self.translate
+                        else "Speech is transcribed in its own language.",
+                        urgency="normal",
+                    )
+                    conn.send(new.encode())
                 else:
                     log.warning("Unknown command: %r", cmd)
             finally:

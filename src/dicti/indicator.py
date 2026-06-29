@@ -13,7 +13,8 @@ default).
 A small top-bar AppIndicator that mirrors the daemon's dictation state. It
 watches $XDG_RUNTIME_DIR/dictation.state (written by the daemon on every
 transition) and swaps its icon between idle / listening / processing. The menu
-sends TOGGLE / CANCEL commands to the daemon over its unix socket.
+sends START / STOP / TRANSLATE commands to the daemon over its unix socket;
+the Translate-to-English check item mirrors the dictation.translate state file.
 
 Runs as a separate user service (dicti-indicator.service) so it can fail and
 restart independently of the daemon. Requires PyGObject + an AppIndicator
@@ -43,6 +44,7 @@ if not _XDG:
 
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"
+TRANSLATE_PATH = Path(_XDG) / "dictation.translate"
 
 # Brand bar-icons (deep green + pink), shipped with the package. The GNOME Shell
 # extension draws these animated with Cairo; here (KDE/other) we show the static
@@ -72,6 +74,7 @@ def send_command(cmd: str) -> None:
 
 class Indicator:
     def __init__(self):
+        self._state = "IDLE"
         self.ind = AppIndicator.Indicator.new(
             "dicti",
             ICONS["IDLE"],
@@ -87,14 +90,28 @@ class Indicator:
         menu = Gtk.Menu()
         menu.append(self.status_item)
         menu.append(Gtk.SeparatorMenuItem())
-        self._add_action(menu, "Toggle dictation", lambda _: send_command("TOGGLE"))
-        self._add_action(menu, "Cancel", lambda _: send_command("CANCEL"))
+        # One state-aware item: "Start dictation" when idle (START), "Stop dictation"
+        # while listening (STOP). You can't start twice. Greyed while transcribing.
+        self.dictate_item = Gtk.MenuItem(label="Start dictation")
+        self.dictate_item.connect(
+            "activate",
+            lambda _: send_command("START" if self._state == "IDLE" else "STOP"))
+        menu.append(self.dictate_item)
+        menu.append(Gtk.SeparatorMenuItem())
+        # Whisper's translate task: speak any language, type English. The check item
+        # mirrors the daemon's real state (dictation.translate file); a guard flag stops
+        # our own programmatic sync from re-sending TRANSLATE.
+        self._translate_syncing = False
+        self.translate_item = Gtk.CheckMenuItem(label="Translate to English")
+        self.translate_item.connect("toggled", self._on_translate_toggled)
+        menu.append(self.translate_item)
         menu.append(Gtk.SeparatorMenuItem())
         self._add_action(menu, "Quit indicator", lambda _: Gtk.main_quit())
         menu.show_all()
         self.ind.set_menu(menu)
 
         self._apply_state(self._read_state())
+        self._apply_translate(self._read_translate())
         self._watch_state_file()
 
     def _add_action(self, menu, label, cb):
@@ -108,10 +125,34 @@ class Indicator:
         except OSError:
             return "IDLE"
 
+    def _read_translate(self) -> bool:
+        try:
+            return TRANSLATE_PATH.read_text().strip() == "ON"
+        except OSError:
+            return False
+
     def _apply_state(self, state: str):
+        self._state = state
         icon = ICONS.get(state, ICONS["IDLE"])
         self.ind.set_icon_full(icon, state.title())
         self.status_item.set_label(LABELS.get(state, state))
+        # IDLE -> "Start dictation"; otherwise "Stop dictation"; greyed while transcribing.
+        self.dictate_item.set_label(
+            "Start dictation" if state == "IDLE" else "Stop dictation")
+        self.dictate_item.set_sensitive(state != "PROCESSING")
+
+    def _apply_translate(self, on: bool):
+        if self.translate_item.get_active() == on:
+            return
+        # setting active fires "toggled"; guard so we don't echo a command back
+        self._translate_syncing = True
+        self.translate_item.set_active(on)
+        self._translate_syncing = False
+
+    def _on_translate_toggled(self, _item):
+        if self._translate_syncing:
+            return
+        send_command("TRANSLATE")
 
     def _watch_state_file(self):
         gfile = Gio.File.new_for_path(str(STATE_PATH))
@@ -122,9 +163,11 @@ class Indicator:
 
     def _on_changed(self, *_args):
         self._apply_state(self._read_state())
+        self._apply_translate(self._read_translate())
 
     def _poll(self):
         self._apply_state(self._read_state())
+        self._apply_translate(self._read_translate())
         return True
 
 

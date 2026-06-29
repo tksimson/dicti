@@ -139,6 +139,26 @@ def test_wav_bytes_roundtrip():
         assert r.readframes(SAMPLE_RATE) == pcm
 
 
+def test_translate_param_sent_only_when_enabled():
+    """_post_inference adds translate=true to the form only when self.translate is on."""
+    seen = {}
+    orig_post = _req.post
+    _req.post = lambda url, files=None, data=None, timeout=None: (
+        seen.update(data or {}) or _Resp(_req.next_text))
+    try:
+        d = _new_daemon()
+        d.translate = False
+        seen.clear()
+        d._post_inference(io.BytesIO(d._wav_bytes(b"\x00\x00" * 100)))
+        assert "translate" not in seen, seen
+        d.translate = True
+        seen.clear()
+        d._post_inference(io.BytesIO(d._wav_bytes(b"\x00\x00" * 100)))
+        assert seen.get("translate") == "true", seen
+    finally:
+        _req.post = orig_post
+
+
 def _wav_path():
     from dicti.daemon import TMP_WAV
     return str(TMP_WAV)
