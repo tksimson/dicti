@@ -3,10 +3,11 @@
 dicti is a local, offline live-dictation tool for Linux. The aim: the best-in-class
 push-to-talk dictation experience on Linux, GNOME first, then broader desktops and distros.
 
-**You are here:** v0.3.5 shipped, live streaming, a calm animated indicator, and settled text
-insertion. v0.4 is next. The full shipped history is folded in at the bottom.
+**You are here:** v0.3.8 shipped, live streaming, a calm animated indicator, settled text
+insertion, and a state machine that no longer stalls or goes quiet. v0.4 is next. The full
+shipped history is folded in at the bottom.
 
-> v0.2 daily-driver fixes &rarr; v0.3 live streaming + VAD &rarr; v0.3.5 identity & calm &rarr; **v0.4 word-level refinement (next)**
+> v0.2 daily-driver fixes &rarr; v0.3 live streaming + VAD &rarr; v0.3.5 identity & calm &rarr; v0.3.8 reliability &rarr; **v0.4 word-level refinement (next)**
 
 ## Next: v0.4, Word-level refinement & polish
 
@@ -84,6 +85,30 @@ the core (best-in-class Linux dictation) *better*, not just *bigger*.
   ride the menu + a fuzzy finder before it ever became a bespoke UI.
 
 ## Shipped so far
+
+<details>
+<summary><b>v0.3.8</b> &middot; Reliability: it stops when it's done, and it never goes quiet</summary>
+
+<br>
+
+The two things that made dicti feel unreliable in daily use, fixed at the root.
+
+- **Dictation ends when the typing does.** Stopping used to re-transcribe the whole recording
+  end to end (12s+ on a few minutes of audio, growing with session length) before releasing
+  the state machine, purely to fill the clipboard and `dictate-last`. That refinement now runs
+  in the background once the daemon is idle, and only for long sessions where it beats the
+  streamed text. The stop itself usually needs no transcription at all: you finish talking,
+  then reach for the key, so the audio the last streaming pass missed is your own silence,
+  and dicti now reuses that pass instead of re-running the whole window over it.
+- **It never goes quiet.** A failing streaming pass used to kill the monitor thread silently:
+  still recording, typing nothing, reporting nothing, until the one-hour cap. Passes now
+  retry and then fail visibly; a dead `pw-record` is detected; a stalled socket client can no
+  longer wedge the daemon; and busy/rejected keypresses notify again (the 0.3.5
+  `notify_level` default had been swallowing them).
+- **Key repeat is debounced.** The toggle shortcut auto-repeats when held, and a burst used to
+  ping-pong the state machine into recording-while-looking-idle.
+
+</details>
 
 <details>
 <summary><b>v0.3.7</b> &middot; Translate to English + a click-to-open indicator menu</summary>

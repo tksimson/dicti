@@ -14,6 +14,7 @@ import sys
 import tempfile
 import types
 import wave
+from pathlib import Path
 
 # --- stub requests so no whisper-server is needed ------------------------------
 _req = types.ModuleType("requests")
@@ -124,9 +125,70 @@ def test_final_flush_types_tail():
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SAMPLE_RATE)
         w.writeframes(b"\x10\x00" * SAMPLE_RATE)  # 1s of audio so _read_pcm has data
     d._anchor_byte = 0
-    d._final_flush()
+    d._final_flush(Path(_wav_path()))
     assert d._session_text == "alpha beta gamma", d._session_text
     assert d.typed[-1] == " gamma", d.typed
+
+
+def test_final_flush_reuses_in_flight_pass():
+    """When a pass already covers the recording, STOP must not pay for a second inference."""
+    d = _new_daemon()
+    _commit_pass(d, "alpha beta".split())
+    with wave.open(_wav_path(), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SAMPLE_RATE)
+        w.writeframes(b"\x10\x00" * SAMPLE_RATE)
+    end = d._data_end()
+    d._anchor_byte = 0
+    d._last_pass = (0, end, "alpha beta gamma".split())
+    d._pass_done.set()
+    calls = []
+    d._transcribe_pcm = lambda pcm: calls.append(pcm) or "SHOULD NOT BE USED"
+    d._final_flush(Path(_wav_path()))
+    assert calls == [], "final flush re-transcribed audio a pass already covered"
+    assert d.typed[-1] == " gamma", d.typed
+
+
+def test_final_flush_transcribes_when_audio_grew():
+    """A pass that predates the last spoken words must not be reused."""
+    d = _new_daemon()
+    _commit_pass(d, "alpha".split())
+    _write_wav(loud_sec=3.0)
+    d._anchor_byte = 0
+    d._last_pass = (0, 100, "alpha".split())  # stale: covers a fraction of the audio
+    d._pass_done.set()
+    _req.next_text = "alpha beta"
+    d._final_flush(Path(_wav_path()))
+    assert d._session_text == "alpha beta", d._session_text
+
+
+def test_final_flush_reuses_a_pass_when_the_tail_is_silence():
+    """You stop talking, then reach for the key. Re-transcribing the whole window over those
+    few seconds of silence returns the identical words and used to cost 4s+ of PROCESSING."""
+    d = _new_daemon()
+    _commit_pass(d, "alpha beta".split())
+    _write_wav(loud_sec=1.0, quiet_sec=3.0)   # spoke for 1s, then 3s of reaching for the key
+    d._anchor_byte = 0
+    speech_end = SAMPLE_RATE * 2              # the pass saw everything up to the silence
+    d._last_pass = (0, speech_end, "alpha beta gamma".split())
+    d._pass_done.set()
+    calls = []
+    d._transcribe_pcm = lambda pcm: calls.append(pcm) or "SHOULD NOT BE USED"
+    d._final_flush(Path(_wav_path()))
+    assert calls == [], "re-transcribed the whole window to cover trailing silence"
+    assert d.typed[-1] == " gamma", d.typed
+
+
+def test_final_flush_transcribes_when_the_tail_holds_speech():
+    """The safety side of the same check: still speaking at the key press = real work to do."""
+    d = _new_daemon()
+    _commit_pass(d, "alpha".split())
+    _write_wav(quiet_sec=1.0, loud_sec=1.0)   # last words land after the pass, before silence
+    d._anchor_byte = 0
+    d._last_pass = (0, SAMPLE_RATE, "alpha".split())
+    d._pass_done.set()
+    _req.next_text = "alpha beta"
+    d._final_flush(Path(_wav_path()))
+    assert d._session_text == "alpha beta", d._session_text
 
 
 def test_wav_bytes_roundtrip():
@@ -162,6 +224,15 @@ def test_translate_param_sent_only_when_enabled():
 def _wav_path():
     from dicti.daemon import TMP_WAV
     return str(TMP_WAV)
+
+
+def _write_wav(loud_sec=0.0, quiet_sec=0.0):
+    """A recording of `loud_sec` well above the speech RMS threshold, then `quiet_sec` of
+    near-silence (the pause between your last word and the key press)."""
+    with wave.open(_wav_path(), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SAMPLE_RATE)
+        w.writeframes(b"\x00\x40" * int(SAMPLE_RATE * loud_sec))    # 16384 = RMS 0.5
+        w.writeframes(b"\x10\x00" * int(SAMPLE_RATE * quiet_sec))   # 16 = RMS 0.0005
 
 
 if __name__ == "__main__":

@@ -19,6 +19,12 @@ including elapsed PROCESSING time, so a slow transcribe never looks like a
 dead key. Current state is mirrored to $XDG_RUNTIME_DIR/dictation.state on every
 transition so the tray indicator can follow along.
 
+PROCESSING is kept as short as the audio allows: once the last words are typed the
+daemon returns to IDLE, and any optional full-context refinement of the transcript
+runs in the background. Repeat commands from a held-down shortcut key are debounced,
+and a session that cannot continue (recorder died, whisper unreachable) ends with a
+visible error rather than listening silently.
+
 At startup, the daemon reads the whisper-server journal for this boot and
 escalates if Vulkan didn't engage, we'd rather know immediately than after
 30 seconds of confusion.
@@ -58,6 +64,9 @@ TMP_WAV = Path("/tmp/dictation-record.wav")
 SAMPLE_RATE = 16000
 BYTES_PER_SAMPLE = 2  # s16 mono
 WAV_HEADER_BYTES = 44
+MIN_PASS_BYTES = SAMPLE_RATE * BYTES_PER_SAMPLE // 2  # ~0.5s: shortest worthwhile pass
+PASS_WAIT_SEC = 60  # how long the final flush waits for an in-flight streaming pass
+TAIL_CHECK_SEC = 0.25  # RMS window when deciding whether the un-transcribed tail is silence
 
 # A segment that is wholly a non-speech annotation, e.g. "[Silence]", "[ Foreign
 # Language ]", "(silence)", "[Birds singing]", "♪ music ♪".
@@ -108,6 +117,9 @@ logging.basicConfig(
 log = logging.getLogger("dictation")
 
 
+_DEBOUNCED = {"START", "STOP", "TOGGLE"}  # commands a repeating key can flood
+
+
 class State:
     IDLE = "IDLE"
     LISTENING = "LISTENING"
@@ -135,6 +147,14 @@ class Daemon:
         self._typed_any = False        # have we typed anything this session?
         self._session_text = ""        # full text typed this session (for clipboard)
         self._last_progress = 0.0      # monotonic time of last committed word (auto-stop)
+        # Result of the most recent completed streaming pass: (anchor, end, words). Lets the
+        # final flush at STOP reuse a pass that already covers the audio instead of paying
+        # for another full inference (see _final_flush).
+        self._last_pass: tuple[int, int, list[str]] | None = None
+        self._pass_done = threading.Event()  # clear while a pass is in flight
+        self._pass_done.set()
+        self._session_seq = 0          # names the detached WAV handed to background refine
+        self._last_cmd_at = 0.0        # monotonic time of the last accepted command (debounce)
         self.inserter = make_inserter(self.cfg)
         log.info("Insertion backend: %s (session=%s)", self.inserter.name,
                  os.environ.get("XDG_SESSION_TYPE", "?"))
@@ -165,14 +185,18 @@ class Daemon:
     # ---- notifications -----------------------------------------------------
 
     def notify(self, summary: str, body: str = "",
-               urgency: str = "low", timeout_ms: int = 2000) -> None:
+               urgency: str = "low", timeout_ms: int = 2000,
+               important: bool = False) -> None:
         # Gate by notify_level. Routine status (low/normal) is suppressed unless
         # "all"; only "critical" survives at the default "error" level (the panel
         # icon conveys normal state, so routine popups are pure noise).
+        # `important` marks direct feedback on a keypress the user just made (e.g. "busy,
+        # can't start yet"): silently dropping that is what makes dicti look dead, so it
+        # survives "error" too. Only "off" silences everything.
         level = getattr(self.cfg, "notify_level", "error")
         if level == "off":
             return
-        if level == "error" and urgency != "critical":
+        if level == "error" and urgency != "critical" and not important:
             return
         try:
             subprocess.run(
@@ -194,6 +218,7 @@ class Daemon:
             f"Still transcribing… {self._processing_elapsed()}s elapsed",
             urgency="normal",
             timeout_ms=3000,
+            important=True,
         )
 
     # ---- recording lifecycle ----------------------------------------------
@@ -221,9 +246,13 @@ class Daemon:
                 return
             if self.state != State.IDLE:
                 log.info("START rejected; state=%s", self.state)
-                self.notify("Dictation busy", f"state={self.state}", urgency="normal")
+                self.notify("Dictation busy", f"state={self.state}",
+                            urgency="normal", important=True)
                 return
             TMP_WAV.unlink(missing_ok=True)
+            # Bumping the session counter also tells a background refine from the previous
+            # session to stand down: whisper-server is single-threaded and this one needs it.
+            self._session_seq += 1
             log.info("Starting pw-record -> %s", TMP_WAV)
             self.recorder = subprocess.Popen(
                 ["pw-record", "--rate=16000", "--format=s16", "--channels=1", str(TMP_WAV)],
@@ -247,10 +276,13 @@ class Daemon:
                 self._displayed_words = []
                 self._typed_any = False
                 self._session_text = ""
+                self._last_pass = None
+                self._pass_done.set()
                 monitor = self._stream_loop
             else:
                 monitor = self._monitor_silence
-            self.silence_thread = threading.Thread(target=monitor, daemon=True)
+            self.silence_thread = threading.Thread(
+                target=self._run_monitor, args=(monitor,), daemon=True)
             self.silence_thread.start()
         # No "listening" popup by design, the tray indicator shows the state.
         log.info("Listening (mode=%s, max %ds, auto-stop after %ds silence)",
@@ -258,6 +290,29 @@ class Daemon:
 
     def _safety_stop(self) -> None:
         log.info("Safety timeout fired (%ds)", self.cfg.max_record_sec)
+        self.stop_and_transcribe()
+
+    def _run_monitor(self, monitor) -> None:
+        """Run a monitor thread so that no failure can strand the session in LISTENING.
+        An unhandled exception here used to kill the thread silently: dicti kept recording,
+        typed nothing and reported nothing until the 1-hour cap, which reads as "stuck"."""
+        try:
+            monitor()
+        except Exception as e:
+            log.exception("Monitor thread crashed; ending session")
+            self.notify("Dictation error", str(e)[:80], urgency="critical")
+            try:
+                self.stop_and_transcribe()
+            except Exception:
+                log.exception("Recovery stop failed")
+                with self.lock:
+                    self._abort_recorder_unlocked()
+                    self._set_state(State.IDLE)
+
+    def _abort_session(self, summary: str, body: str) -> None:
+        """End a session that cannot continue, with a visible reason."""
+        log.error("%s: %s", summary, body)
+        self.notify(summary, body, urgency="critical", timeout_ms=6000)
         self.stop_and_transcribe()
 
     def _monitor_silence(self) -> None:
@@ -309,10 +364,10 @@ class Daemon:
 
     # ---- streaming -------------------------------------------------------
 
-    def _data_end(self) -> int:
-        """Bytes of PCM data currently in TMP_WAV (file size minus header)."""
+    def _data_end(self, path: Path = TMP_WAV) -> int:
+        """Bytes of PCM data currently in the recording (file size minus header)."""
         try:
-            return max(0, TMP_WAV.stat().st_size - WAV_HEADER_BYTES)
+            return max(0, path.stat().st_size - WAV_HEADER_BYTES)
         except OSError:
             return 0
 
@@ -332,31 +387,52 @@ class Daemon:
         and a fresh context window starts, to bound the per-pass cost. The session
         auto-stops after silence_timeout_sec with no newly committed words."""
         max_ctx_bytes = int(self.cfg.max_context_sec * SAMPLE_RATE) * BYTES_PER_SAMPLE
-        min_window = SAMPLE_RATE * BYTES_PER_SAMPLE // 2  # need ~0.5s before a first pass
         prev_words: list[str] = []
+        failures = 0
         self._last_progress = time.monotonic()
         while not self.silence_stop.is_set():
             t0 = time.monotonic()
+            if self._recorder_died():
+                self._abort_session("Dictation stopped",
+                                    "the microphone recorder exited unexpectedly")
+                return
             anchor = self._anchor_byte
             end = self._data_end()
-            if end - anchor >= min_window:
-                pcm = self._read_pcm(anchor, end)
-                words = self._clean_transcript(self._transcribe_pcm(pcm)).split()
-                if self.silence_stop.is_set():
-                    return  # a STOP raced in; let the final flush be authoritative
-                with self._flush_lock:
-                    if end - anchor >= max_ctx_bytes:
-                        # window full: commit everything and re-anchor for bounded cost
-                        self._emit_words(words[len(self._displayed_words):])
-                        self._anchor_byte = end
-                        self._displayed_words = []
-                        prev_words = []
-                    else:
-                        stable = _common_prefix(words, prev_words)
-                        if len(stable) > len(self._displayed_words):
-                            self._emit_words(stable[len(self._displayed_words):])
-                            self._displayed_words = stable
-                        prev_words = words
+            try:
+                if end - anchor >= MIN_PASS_BYTES:
+                    pcm = self._read_pcm(anchor, end)
+                    self._pass_done.clear()
+                    words = self._clean_transcript(self._transcribe_pcm(pcm)).split()
+                    # Record before the stop check: if a STOP raced this pass, the final
+                    # flush can reuse the result instead of paying for another inference.
+                    self._last_pass = (anchor, end, words)
+                    self._pass_done.set()
+                    if self.silence_stop.is_set():
+                        return  # a STOP raced in; let the final flush be authoritative
+                    with self._flush_lock:
+                        if end - anchor >= max_ctx_bytes:
+                            # window full: commit everything and re-anchor for bounded cost
+                            self._emit_words(words[len(self._displayed_words):])
+                            self._anchor_byte = end
+                            self._displayed_words = []
+                            prev_words = []
+                        else:
+                            stable = _common_prefix(words, prev_words)
+                            if len(stable) > len(self._displayed_words):
+                                self._emit_words(stable[len(self._displayed_words):])
+                                self._displayed_words = stable
+                            prev_words = words
+                failures = 0
+            except Exception as e:
+                # A transient whisper-server or insertion failure must not kill the loop
+                # (that stranded the session in LISTENING, typing nothing, reporting nothing).
+                self._pass_done.set()
+                failures += 1
+                log.warning("Streaming pass failed (%d/%d): %s",
+                            failures, self.cfg.stream_max_failures, e)
+                if failures >= self.cfg.stream_max_failures:
+                    self._abort_session("Dictation failed", str(e)[:80])
+                    return
             if time.monotonic() - self._last_progress >= self.cfg.silence_timeout_sec:
                 log.info("Silence auto-stop (%ds without new committed words)",
                          self.cfg.silence_timeout_sec)
@@ -365,6 +441,16 @@ class Daemon:
             wait = self.cfg.stream_interval_sec - (time.monotonic() - t0)
             if self.silence_stop.wait(max(0.1, wait)):
                 return
+
+    def _recorder_died(self) -> bool:
+        """True if pw-record exited on its own (device grabbed, PipeWire restart, ...).
+        Without this the session sat in LISTENING against a WAV that never grows.
+        A stop in progress sets silence_stop before signalling the recorder, so an exit
+        there is expected, not a failure."""
+        if self.silence_stop.is_set():
+            return False
+        rec = self.recorder
+        return rec is not None and rec.poll() is not None
 
     def _emit_words(self, new_words: list[str]) -> None:
         """Insert a list of newly-stable words, append-only, space-joined. Caller holds
@@ -377,28 +463,102 @@ class Daemon:
         self._session_text += piece
         self._last_progress = time.monotonic()  # commit progress, drives silence auto-stop
 
-    def _final_flush(self) -> str:
-        """At STOP: re-transcribe the final context window once more (full context = best
-        quality) and type whatever the stream loop hadn't committed yet (the tail). Returns
-        the full-window transcription text."""
-        pcm = self._read_pcm(self._anchor_byte, self._data_end())
-        words = self._clean_transcript(self._transcribe_pcm(pcm)).split() if pcm else []
+    def _final_flush(self, path: Path) -> str:
+        """At STOP: make sure the final context window is fully typed, including whatever the
+        stream loop hadn't committed yet (the tail). Returns the full-window text.
+
+        Usually there is nothing left to transcribe. You stop talking, then reach for the key,
+        so the audio the last pass didn't see is your silence, and re-running the whole
+        context window over it costs seconds and returns the identical words. So we reuse a
+        pass whenever everything after it is silent, and only pay for an inference when you
+        really were still speaking (see _reusable_pass).
+
+        If a pass is in flight we let it land first: whisper-server serialises requests, so a
+        new POST would queue behind it anyway, and its fresher window is more likely to be
+        reusable."""
+        end = self._data_end(path)
+        words = self._reusable_pass(end, path)
+        if words is None:
+            self._pass_done.wait(timeout=PASS_WAIT_SEC)
+            words = self._reusable_pass(end, path)
+        if words is not None:
+            log.info("Final flush reused a streaming pass, %d words (nothing but silence "
+                     "after it)", len(words))
+        else:
+            pcm = self._read_pcm(self._anchor_byte, end, path)
+            words = self._clean_transcript(self._transcribe_pcm(pcm)).split() if pcm else []
         with self._flush_lock:
             if len(words) > len(self._displayed_words):
                 self._emit_words(words[len(self._displayed_words):])
                 self._displayed_words = words
         return " ".join(words)
 
-    def _best_transcript(self, final_text: str) -> str:
-        """The full-context "perfect" transcription of the whole utterance. For a session
-        that never re-anchored, _final_flush already produced it; a long (re-anchored) one is
-        re-transcribed end to end. Better than the live-typed text, especially the first
-        words, which streaming had to commit with only partial context."""
-        if self._anchor_byte == 0:
-            return final_text or self._session_text
-        full = self._read_pcm(0, self._data_end())
-        best = self._clean_transcript(self._transcribe_pcm(full)) if full else ""
-        return best or final_text or self._session_text
+    def _reusable_pass(self, end: int, path: Path) -> list[str] | None:
+        """Words from the last completed streaming pass, if it already covers every spoken
+        word in the recording; None if a fresh transcription is genuinely needed.
+
+        Reusable when the audio the pass didn't see holds no speech. The check is deliberately
+        biased towards "speech": a false silent verdict would drop your last words, a false
+        speech verdict only costs the inference we would have paid for anyway."""
+        last = self._last_pass
+        if not last or last[0] != self._anchor_byte or last[1] > end:
+            return None
+        if end - last[1] >= MIN_PASS_BYTES and self._range_has_speech(last[1], end, path):
+            return None
+        return last[2]
+
+    def _range_has_speech(self, start: int, end: int, path: Path = TMP_WAV) -> bool:
+        """True if any window in the PCM range exceeds the speech RMS threshold. Uses short
+        windows so a brief word at the edge of a long silence still registers, and returns
+        early on the first speech window. Any read error counts as speech."""
+        if end <= start:
+            return False
+        window = int(TAIL_CHECK_SEC * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        thr = self.cfg.silence_rms_threshold
+        try:
+            with path.open("rb") as f:
+                pos = start
+                while pos < end:
+                    f.seek(WAV_HEADER_BYTES + pos)
+                    raw = f.read(min(window, end - pos))
+                    pos += window
+                    n = len(raw) - (len(raw) % BYTES_PER_SAMPLE)
+                    if n < BYTES_PER_SAMPLE:
+                        continue
+                    samples = array.array("h")
+                    samples.frombytes(raw[:n])
+                    sub = samples[::4]  # an energy gate tolerates downsampling
+                    if sub and math.sqrt(sum(s * s for s in sub) / len(sub)) / 32768.0 >= thr:
+                        return True
+        except OSError:
+            return True
+        return False
+
+    def _refine(self, path: Path, seq: int, session_text: str,
+                preserve_clipboard: bool) -> None:
+        """Produce the full-context "perfect" transcription of the whole recording and save
+        it for `dictate-last` (and the clipboard, when it isn't being preserved).
+
+        Runs in the background, after the daemon is already IDLE: a long session costs a full
+        end-to-end re-transcription (11s+ for a few minutes of audio), and the text has all
+        been typed by then, so blocking on it just made dicti look busy long after it was
+        done. Skipped if the user starts dictating again, whisper-server is single-threaded
+        and the live session must have it."""
+        try:
+            full = self._read_pcm(0, self._data_end(path), path)
+            if not full or seq != self._session_seq:
+                return
+            best = self._clean_transcript(self._transcribe_pcm(full))
+            if not best or seq != self._session_seq:
+                return
+            self._save_last_transcript(best)
+            if not preserve_clipboard and best != session_text:
+                self.inserter.end_session(best, False)
+            log.info("Refined transcript ready (%d chars)", len(best))
+        except Exception:
+            log.exception("Background refine failed (streamed transcript kept)")
+        finally:
+            path.unlink(missing_ok=True)
 
     def _save_last_transcript(self, text: str) -> None:
         """Write the best transcript to a file so the perfect version is recoverable even
@@ -413,13 +573,13 @@ class Daemon:
         except Exception as e:
             log.warning("Could not save transcript: %s", e)
 
-    def _read_pcm(self, start: int, end: int) -> bytes:
+    def _read_pcm(self, start: int, end: int, path: Path = TMP_WAV) -> bytes:
         """Read raw PCM bytes [start:end] (offsets into the data, header excluded)."""
         end -= (end - start) % BYTES_PER_SAMPLE  # keep int16-aligned
         if end <= start:
             return b""
         try:
-            with TMP_WAV.open("rb") as f:
+            with path.open("rb") as f:
                 f.seek(WAV_HEADER_BYTES + start)
                 return f.read(end - start)
         except OSError:
@@ -434,6 +594,17 @@ class Daemon:
             w.writeframes(pcm)
         return buf.getvalue()
 
+    def _detach_recording(self) -> Path:
+        """Move the finished recording aside, so the next dictation gets a fresh TMP_WAV
+        while background refinement still has this session's audio. Caller holds self.lock."""
+        dest = TMP_WAV.with_name(f"dictation-session-{self._session_seq}.wav")
+        try:
+            TMP_WAV.replace(dest)
+        except OSError as e:
+            log.warning("Could not detach recording: %s", e)
+            return TMP_WAV
+        return dest
+
     def stop_and_transcribe(self) -> None:
         with self.lock:
             if self.state == State.PROCESSING:
@@ -447,19 +618,32 @@ class Daemon:
             self.processing_started_at = time.monotonic()
             streaming = self.cfg.mode == "streaming"
             self._abort_recorder_unlocked()
+            session_wav = self._detach_recording() if streaming else TMP_WAV
+            seq = self._session_seq
 
         try:
             if streaming:
-                final_text = self._final_flush()
-                best = self._best_transcript(final_text)
+                final_text = self._final_flush(session_wav)
+                # Everything the user spoke is on screen now, so the state machine is free
+                # immediately. The streamed text is saved and put on the clipboard right
+                # away; a background pass may upgrade both to the full-context version.
+                best = final_text or self._session_text
                 self._save_last_transcript(best)
-                # The perfect (full-context) text goes to the clipboard, so preserve=false
-                # leaves the best version, not the streamed one, as the re-paste fallback.
                 self.inserter.end_session(best, self.cfg.preserve_clipboard)
                 if self._typed_any or best:
                     self.notify("done", best[:80], urgency="low")
                 else:
                     self.notify("empty transcript", "", urgency="normal")
+                if self._anchor_byte and self.cfg.refine_transcript:
+                    # Re-anchored (long) session: the typed text was committed window by
+                    # window, so a full-context re-transcription is genuinely better.
+                    threading.Thread(
+                        target=self._refine,
+                        args=(session_wav, seq, best, self.cfg.preserve_clipboard),
+                        daemon=True).start()
+                    session_wav = None
+                if session_wav is not None and session_wav != TMP_WAV:
+                    session_wav.unlink(missing_ok=True)
             else:
                 text = self._clean_transcript(self._transcribe())
                 if text:
@@ -475,6 +659,14 @@ class Daemon:
             with self.lock:
                 self._set_state(State.IDLE)
                 self.processing_started_at = None
+
+    def toggle(self) -> None:
+        """Start or stop, deciding under the lock. Reading self.state from the socket thread
+        and dispatching on the stale value let a burst of TOGGLEs all resolve to START, so
+        the losing ones were rejected and the user's intended STOP was silently dropped."""
+        with self.lock:
+            idle = self.state == State.IDLE
+        (self.start_recording if idle else self.stop_and_transcribe)()
 
     def cancel(self) -> None:
         with self.lock:
@@ -625,6 +817,18 @@ class Daemon:
 
     # ---- socket server -----------------------------------------------------
 
+    def _debounced(self, cmd: str) -> bool:
+        """True if this command should be dropped as a repeat. The toggle key is an ordinary
+        shortcut, so holding it auto-repeats: a burst used to ping-pong the state machine
+        (start/stop/start within one second) and leave dicti recording when it looked idle."""
+        window = self.cfg.command_debounce_ms / 1000.0
+        now = time.monotonic()
+        if now - self._last_cmd_at < window:
+            log.info("Ignoring %s (repeat within %dms)", cmd, self.cfg.command_debounce_ms)
+            return True
+        self._last_cmd_at = now
+        return False
+
     def serve(self) -> None:
         SOCK_PATH.unlink(missing_ok=True)
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -636,15 +840,20 @@ class Daemon:
         while True:
             conn, _ = srv.accept()
             try:
+                # A client that connects and never sends must not wedge the daemon: this
+                # accept loop is single-threaded, so a blocking recv here froze every
+                # subsequent keypress until a restart.
+                conn.settimeout(2.0)
                 cmd = conn.recv(64).decode("utf-8", "replace").strip().upper()
                 log.info("Got command: %s (state=%s)", cmd, self.state)
+                if cmd in _DEBOUNCED and self._debounced(cmd):
+                    continue
                 if cmd == "START":
                     threading.Thread(target=self.start_recording, daemon=True).start()
                 elif cmd == "STOP":
                     threading.Thread(target=self.stop_and_transcribe, daemon=True).start()
                 elif cmd == "TOGGLE":
-                    target = self.start_recording if self.state == State.IDLE else self.stop_and_transcribe
-                    threading.Thread(target=target, daemon=True).start()
+                    threading.Thread(target=self.toggle, daemon=True).start()
                 elif cmd == "CANCEL":
                     threading.Thread(target=self.cancel, daemon=True).start()
                 elif cmd == "STATUS":
@@ -663,6 +872,8 @@ class Daemon:
                     conn.send(new.encode())
                 else:
                     log.warning("Unknown command: %r", cmd)
+            except Exception:
+                log.exception("Command handling failed")
             finally:
                 conn.close()
 
@@ -680,6 +891,10 @@ def preflight() -> None:
                     "wl-clipboard" if clip == "wl-copy" else "xclip")
     if not SOCK_PATH.parent.exists():
         raise SystemExit(f"XDG_RUNTIME_DIR missing: {SOCK_PATH.parent}")
+    # Session WAVs are handed to background refinement and deleted by it; a crash mid-refine
+    # would otherwise leave them behind.
+    for stale in TMP_WAV.parent.glob("dictation-session-*.wav"):
+        stale.unlink(missing_ok=True)
 
 
 def main() -> None:

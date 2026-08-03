@@ -3,6 +3,53 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [0.3.8] - 2026-08-03
+
+Reliability release. Two things made dicti feel unreliable in daily use: it kept
+"processing" long after the last word was on screen, and it could go quiet, accepting
+keypresses while doing nothing. Both are fixed at the root.
+
+### Fixed
+- **Dictation ends when the typing does.** Stopping used to re-transcribe the *entire*
+  recording end to end before releasing the state machine, purely to fill the clipboard and
+  `dictate-last`. On a few minutes of audio that was 12s+ of "still transcribing" with
+  everything already typed, and it grew with session length. That full-context refinement now
+  runs in the background after the daemon is idle again, and only for long (re-anchored)
+  sessions where it actually improves on the streamed text. Disable it with
+  `refine_transcript = false`.
+- **No redundant inference at stop.** Almost always there is nothing left to transcribe: you
+  stop talking, then reach for the key, so the only audio the last streaming pass missed is
+  your own silence. dicti used to re-run the whole context window over it and return the
+  identical words, 4s+ of PROCESSING for nothing. The final flush now reuses that pass
+  whenever the audio after it holds no speech, and only pays for an inference when you really
+  were still speaking. (The check is biased towards "speech": a wrong silent verdict would
+  drop your last words, a wrong speech verdict just costs what it used to.) It also lets a
+  pass that is already in flight land rather than queueing a second one behind it.
+- **A held toggle key no longer ping-pongs the state machine.** The shortcut is an ordinary
+  key, so holding it auto-repeats; a burst used to start/stop/start within a second and could
+  leave dicti recording when it looked idle. Repeats within `command_debounce_ms` (250ms) are
+  ignored, and TOGGLE now decides start-vs-stop under the lock instead of on a stale read.
+- **A failing transcription pass no longer kills the session silently.** Any error in the
+  streaming loop (whisper-server restarting, a dropped connection, ydotoold down) used to end
+  the monitor thread without a word: dicti kept recording, typed nothing and reported nothing
+  until the one-hour cap. Passes now retry, and after `stream_max_failures` (3) the session
+  ends with a visible error.
+- **A dead recorder is detected.** If `pw-record` exits (device grabbed, PipeWire restart),
+  the session stops with an error instead of listening to a file that never grows.
+- **Rejected keypresses are visible again.** `notify_level = "error"` (the default since
+  0.3.5) was swallowing every "busy" popup, so a keypress that arrived mid-transcription
+  produced no text, no popup and no explanation. Direct feedback on your own keypress now
+  survives that level; `notify_level = "off"` still silences everything.
+- **A stalled client can no longer wedge the daemon.** The socket accept loop is
+  single-threaded and had no read timeout, so one connection that never sent a command froze
+  every subsequent keypress until a restart.
+
+### Added
+- Config: `refine_transcript` (default true), `command_debounce_ms` (default 250),
+  `stream_max_failures` (default 3).
+- 11 reliability tests (`tests/test_reliability.py`) plus silent-tail cases in
+  `tests/test_streaming.py`, covering each failure above.
+
 ## [0.3.7] - 2026-06-29
 
 ### Added

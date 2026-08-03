@@ -24,8 +24,19 @@ stream_interval_sec = 2.0    # target seconds between transcription passes. Lowe
 max_context_sec = 60.0       # cap the re-transcribed window. Past this the text so far is
                              #   committed and a fresh context window starts, so a very long
                              #   dictation doesn't make each pass slower without bound.
+stream_max_failures = 3      # consecutive failed passes (whisper down, connection dropped)
+                             #   before the session ends with a visible error instead of
+                             #   listening on silently.
+refine_transcript = true     # after a long session, re-transcribe the whole recording once
+                             #   more for the full-context "perfect" version behind
+                             #   `dictate-last` and the clipboard. Runs in the background
+                             #   after dicti is idle again, so it never delays you; set false
+                             #   to skip it and keep the streamed text as final.
 
 # --- Session limits ---
+command_debounce_ms = 250    # ignore repeats of START/STOP/TOGGLE within this window. The
+                             #   toggle shortcut auto-repeats when held, which would otherwise
+                             #   ping-pong the state machine.
 max_record_sec = 3600        # hard safety cap on a single session (1 hour)
 silence_timeout_sec = 180    # auto-stop after this many seconds of continuous silence
 silence_check_interval_sec = 3.0   # how often the silence monitor samples the audio

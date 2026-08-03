@@ -42,6 +42,18 @@ class Config:
     stream_interval_sec: float = 2.0     # target seconds between transcription passes
     max_context_sec: float = 60.0        # cap the re-transcribed window; past this the text
     #                                      so far is committed and a fresh context window starts
+    stream_max_failures: int = 3         # consecutive failed passes before the session aborts
+    #                                      with a visible error instead of listening silently
+
+    # After a long (re-anchored) session, dicti re-transcribes the whole recording end to
+    # end for the "perfect" full-context version behind `dictate-last` / the clipboard.
+    # It runs in the background *after* the daemon is idle again, so it never delays the
+    # next dictation. Set false to skip it (the streamed text is then the final one).
+    refine_transcript: bool = True
+
+    # Ignore repeats of START/STOP/TOGGLE arriving within this window. The toggle key is a
+    # normal shortcut, so holding it auto-repeats and used to ping-pong the state machine.
+    command_debounce_ms: int = 250
 
     # Session limits
     max_record_sec: int = 3600          # hard safety backstop (1 hour)

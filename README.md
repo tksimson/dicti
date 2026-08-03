@@ -160,6 +160,7 @@ seeds one from [`config/config.toml.example`](config/config.toml.example)), then
 | `silence_timeout_sec` | how long of real silence before auto-stop |
 | `insert_backend` / `paste_keys` | text insertion path and paste shortcut |
 | `notify_level` | `error` (default), `off`, or `all` |
+| `refine_transcript` | `true` (default): after a long session, refine the transcript in the background for `dictate-last`. `false` keeps the streamed text as final |
 
 > **Tip:** Whisper transcribes one language per pass. `auto` works well for mixed use now that
 > streaming keeps full context, but pin `language` to your main one if a quiet voice gets
@@ -189,6 +190,9 @@ list is very welcome.
   the `input` group (log out/in after install).
 - **No top-bar icon:** reload GNOME Shell (Alt+F2, `r` on X11; log out/in on Wayland), then
   `gnome-extensions enable dicti@local`.
+- **Key does nothing:** check the state with `dictate-toggle STATUS`. `PROCESSING` means a
+  transcription is still finishing (dicti tells you how long it's been). Anything else is a
+  bug worth reporting, with `journalctl --user -u dictation -b`.
 - **Live logs:** `journalctl --user -u dictation -u whisper-server -f`.
 
 </details>
