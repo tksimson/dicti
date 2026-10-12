@@ -24,6 +24,11 @@ All notable changes to dicti are documented here. Format loosely follows
 - Streaming no longer holds back a sentence when a pass re-hears a word that is already
   typed, or flips only its case or punctuation. Only the words after the typed text must
   agree across passes.
+- **Polish no longer flickers the screen.** On the Polish (programmers) layout, ą ć ę ł ń ó
+  ś ź ż are typed with AltGr instead of pasted, so dictation stays off your clipboard and
+  out of clipboard managers. Other layouts and other non-ASCII text still paste.
+- No more stray full stops mid-sentence: the last word of each pass waits for the next one,
+  because at a pause the model ends it with a full stop.
 
 ### Security
 - **Recordings are private and never kept.** The recording used to live at

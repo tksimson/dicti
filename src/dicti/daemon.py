@@ -447,12 +447,14 @@ class Daemon:
                         else:
                             # Only the words after the typed text must agree: typed words
                             # are final, so a pass re-hearing one of them differently must
-                            # not hold back the rest of the sentence.
+                            # not hold back the rest of the sentence. The pass's last word
+                            # waits for a successor (or STOP): at a pause the model ends it
+                            # with a full stop that the next words would have removed.
                             shown = self._displayed_words
                             start = _typed_end(shown, words)
                             prev_start = _typed_end(shown, prev_words)
                             if start is not None and prev_start is not None:
-                                new = _common_prefix(words[start:], prev_words[prev_start:])
+                                new = _common_prefix(words[start:-1], prev_words[prev_start:])
                                 if new:
                                     self._emit_words(new)
                                     self._displayed_words = shown + new

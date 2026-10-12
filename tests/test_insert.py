@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import dicti.insert as ins  # noqa: E402
 from dicti.config import Config  # noqa: E402
 
+_real_pl_layout_active = ins._pl_layout_active  # _patch replaces it; the parser test needs it
+
 
 def _cfg(**kw):
     c = Config()
@@ -42,12 +44,13 @@ class _FakeClip:
         self.sets.append(data)
 
 
-def _patch(monkey_terminal=False):
+def _patch(monkey_terminal=False, pl_layout=False):
     """Patch helpers; return a list that records (kind, payload)."""
     rec = []
     ins._ydotool_type = lambda text, delay: rec.append(("type", text))
     ins._ydotool_key = lambda keys: rec.append(("key", keys))
     ins._active_window_is_terminal = lambda: monkey_terminal
+    ins._pl_layout_active = lambda: pl_layout
     # Replace insert's own reference, never time.sleep itself: that would turn every
     # later test's sleep into a no-op.
     ins.time = types.SimpleNamespace(sleep=lambda s: None)
@@ -83,6 +86,50 @@ def test_ascii_types_nonascii_pastes():
     kinds = [r[0] for r in rec]
     assert kinds == ["type", "key"], rec          # ascii typed, polish pasted (one key event)
     assert it.clip.sets[0] == "Cześć"             # exact text went to the clipboard
+
+
+def test_polish_is_typed_with_altgr_on_the_pl_layout_never_pasted():
+    rec = _patch(pl_layout=True)
+    it = ins.ClipboardInserter(_cfg())
+    it.clip = _FakeClip()
+    it.insert(" Zażółć gęślą Łódź")
+    assert it.clip.sets == [] and it.clip.gets == 0, "the clipboard must not be touched"
+    assert rec[0] == ("type", " Za")
+    # żółć = AltGr held around z o l c
+    assert rec[1] == ("key", ["100:1", "44:1", "44:0", "24:1", "24:0", "38:1", "38:0",
+                              "46:1", "46:0", "100:0"]), rec[1]
+    # Łó = Shift only around the capital
+    assert ("key", ["100:1", "42:1", "38:1", "38:0", "42:0", "24:1", "24:0", "100:0"]) in rec
+    typed = "".join(p for kind, p in rec if kind == "type")
+    assert typed == " Za gl d", typed  # Ł ó, d, ź: only the d is plain ASCII
+
+
+def test_other_unicode_still_pastes_on_the_pl_layout():
+    rec = _patch(pl_layout=True)
+    it = ins.ClipboardInserter(_cfg(paste_keys="ctrl+v"))
+    it.clip = _FakeClip()
+    it.insert("café ż")
+    assert it.clip.sets == ["café ż"] and ("key", ins._KEYS_CTRL_V) in rec, rec
+
+
+def test_pl_layout_detection():
+    answers = {}
+    real_subprocess = ins.subprocess
+    ins.subprocess = types.SimpleNamespace(
+        run=lambda cmd, **kw: types.SimpleNamespace(stdout=answers[cmd[-1]]))
+    try:
+        for mru, sources, opts, want in [
+            ("[('xkb', 'pl'), ('xkb', 'us')]\n", "", "@as []\n", True),
+            ("@a(ss) []\n", "[('xkb', 'pl')]\n", "['caps:escape']\n", True),
+            ("[('xkb', 'us'), ('xkb', 'pl')]\n", "", "@as []\n", False),
+            ("[('xkb', 'pl')]\n", "", "['compose:ralt']\n", False),
+            ("[('xkb', 'pl')]\n", "", "['lv3:lalt_switch']\n", False),
+            ("[('xkb', 'pl+dvorak')]\n", "", "@as []\n", False),
+        ]:
+            answers.update({"mru-sources": mru, "sources": sources, "xkb-options": opts})
+            assert _real_pl_layout_active() is want, (mru, opts)
+    finally:
+        ins.subprocess = real_subprocess
 
 
 def test_paste_keys_modes():

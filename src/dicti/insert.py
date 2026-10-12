@@ -34,6 +34,46 @@ _TERMINAL_WM_HINTS = (
 _KEYS_CTRL_V = ["29:1", "47:1", "47:0", "29:0"]
 _KEYS_CTRL_SHIFT_V = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
 
+# Polish letters on the xkb `pl` (Polish programmers) layout: AltGr (KEY_RIGHTALT=100) + the
+# base key, plus Shift for capitals. Typing them avoids the clipboard, whose every change
+# made GNOME's panel and the focused terminal flicker once streaming committed every ~0.5s.
+_KEY_RIGHTALT, _KEY_LEFTSHIFT = 100, 42
+_PL_ALTGR = {"ą": 30, "ć": 46, "ę": 18, "ł": 38, "ń": 49, "ó": 24, "ś": 31, "ź": 45, "ż": 44}
+
+
+def _pl_keys(chars: str) -> list[str]:
+    """ydotool key events typing a run of Polish letters with AltGr on the pl layout."""
+    keys = [f"{_KEY_RIGHTALT}:1"]
+    for ch in chars:
+        code = _PL_ALTGR[ch.lower()]
+        shift = ch != ch.lower()
+        keys += ([f"{_KEY_LEFTSHIFT}:1"] if shift else []) + [f"{code}:1", f"{code}:0"]
+        keys += [f"{_KEY_LEFTSHIFT}:0"] if shift else []
+    return keys + [f"{_KEY_RIGHTALT}:0"]
+
+
+def _is_pl_typable(ch: str) -> bool:
+    return ch.lower() in _PL_ALTGR
+
+
+def _pl_layout_active() -> bool:
+    """True if GNOME's current input source is xkb `pl` with Right Alt as AltGr. Any doubt
+    (other desktop, other layout, a remapped Right Alt) = False, so callers paste instead."""
+    def get(key: str) -> str:
+        return subprocess.run(["gsettings", "get", "org.gnome.desktop.input-sources", key],
+                              capture_output=True, text=True, timeout=1).stdout
+    try:
+        current = get("mru-sources")
+        if "('" not in current:  # empty until the user first switches sources
+            current = get("sources")
+        options = [o.strip(" '[]\n") for o in get("xkb-options").split(",")]
+    except Exception:
+        return False
+    first = current[current.find("("):].split(")")[0].replace(" ", "")
+    remapped = "compose:ralt" in options or any(
+        o.startswith("lv3:") and o != "lv3:ralt_switch" for o in options)
+    return first == "('xkb','pl'" and not remapped
+
 
 def is_wayland() -> bool:
     return (os.environ.get("XDG_SESSION_TYPE") == "wayland"
@@ -135,14 +175,37 @@ class ClipboardInserter(Inserter):
         self.clip = _Clipboard()
         self._saved: bytes | None = None
         self._saved_done = False
+        self._pl_layout: bool | None = None  # checked once per session, on first need
 
     def insert(self, text: str) -> None:
         if not text:
             return
         if text.isascii():
             _ydotool_type(text, self.cfg.key_delay_ms)
+        elif all(c.isascii() or _is_pl_typable(c) for c in text) and self._pl_ok():
+            self._type_polish(text)
         else:
             self._paste(text)
+
+    def _pl_ok(self) -> bool:
+        if self._pl_layout is None:
+            self._pl_layout = _pl_layout_active()
+            log.info("Polish letters: %s", "typed (pl layout)" if self._pl_layout else "pasted")
+        return self._pl_layout
+
+    def _type_polish(self, text: str) -> None:
+        """Type ASCII runs with `ydotool type` and Polish-letter runs as AltGr chords."""
+        i = 0
+        while i < len(text):
+            polish = _is_pl_typable(text[i])
+            j = i
+            while j < len(text) and _is_pl_typable(text[j]) == polish:
+                j += 1
+            if polish:
+                _ydotool_key(_pl_keys(text[i:j]))
+            else:
+                _ydotool_type(text[i:j], self.cfg.key_delay_ms)
+            i = j
 
     def _paste(self, text: str) -> None:
         if not self._saved_done:           # remember the user's clipboard once per session
@@ -168,6 +231,7 @@ class ClipboardInserter(Inserter):
         elif transcript:
             self.clip.set(transcript)
         self._saved, self._saved_done = None, False
+        self._pl_layout = None
 
 
 class WtypeInserter(Inserter):

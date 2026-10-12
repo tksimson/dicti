@@ -104,6 +104,27 @@ def test_stream_loop_types_new_words_when_an_earlier_word_flips():
     assert typed == "Popularne użycie terminu safari odnosi".split(), typed
 
 
+def test_pause_does_not_commit_a_provisional_full_stop():
+    # During a pause every pass ends "razie." ; the sentence then continues.
+    d = _new_daemon()
+    d.cfg.stream_interval_sec = 0.01
+    _write_wav(loud_sec=2.0)
+    passes = iter(["Po polsku na razie.", "Po polsku na razie.", "Po polsku na razie.",
+                   "Po polsku na razie w porządku", "Po polsku na razie w porządku"])
+
+    def fake(pcm):
+        try:
+            return next(passes)
+        except StopIteration:
+            d.silence_stop.set()
+            return ""
+
+    d._transcribe_pcm = fake
+    d._stream_loop()
+    typed = " ".join(d.inserter.typed).split()
+    assert "razie." not in typed and "razie" in typed, typed
+
+
 def test_growing_window_append_only():
     # Three passes of a growing utterance; only stable words get typed, with separators.
     d = _new_daemon()
