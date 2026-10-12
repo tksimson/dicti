@@ -22,24 +22,7 @@ import time
 import types
 import wave
 
-# --- stub requests so no whisper-server is needed ------------------------------
-_req = types.ModuleType("requests")
-
-
-class _Resp:
-    def __init__(self, text):
-        self._t = text
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return {"text": self._t}
-
-
-_req.next_text = ""
-_req.post = lambda url, files=None, data=None, timeout=None: _Resp(_req.next_text)
-sys.modules["requests"] = _req
+import _fake_requests  # noqa: F401  installs the fake before dicti.daemon imports requests
 
 _tmp = tempfile.mkdtemp()
 os.environ["XDG_RUNTIME_DIR"] = _tmp

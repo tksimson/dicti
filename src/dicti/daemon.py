@@ -103,7 +103,7 @@ def _common_prefix(a: list[str], b: list[str]) -> list[str]:
     """Longest leading run of words shared by two word lists. Used to find the text that
     has stabilised across two consecutive re-transcription passes (safe to commit)."""
     out = []
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         if x != y:
             break
         out.append(x)

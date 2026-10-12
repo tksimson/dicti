@@ -12,28 +12,10 @@ import io
 import os
 import sys
 import tempfile
-import types
 import wave
 from pathlib import Path
 
-# --- stub requests so no whisper-server is needed ------------------------------
-_req = types.ModuleType("requests")
-
-
-class _Resp:
-    def __init__(self, text):
-        self._t = text
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return {"text": self._t}
-
-
-_req.next_text = ""
-_req.post = lambda url, files=None, data=None, timeout=None: _Resp(_req.next_text)
-sys.modules["requests"] = _req
+from _fake_requests import _req, _Resp  # before dicti.daemon, which imports requests
 
 # --- isolate XDG + import ------------------------------------------------------
 _tmp = tempfile.mkdtemp()
@@ -87,7 +69,6 @@ def test_growing_window_append_only():
     # Three passes of a growing utterance; only stable words get typed, with separators.
     d = _new_daemon()
     prev = []
-    typed_log = []
     for words in [
         "And so".split(),
         "And so my fellow".split(),

@@ -8,6 +8,7 @@ Run with:  python3 tests/test_insert.py
 import os
 import sys
 import tempfile
+import types
 
 os.environ.setdefault("XDG_RUNTIME_DIR", tempfile.mkdtemp())
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp()
@@ -47,7 +48,9 @@ def _patch(monkey_terminal=False):
     ins._ydotool_type = lambda text, delay: rec.append(("type", text))
     ins._ydotool_key = lambda keys: rec.append(("key", keys))
     ins._active_window_is_terminal = lambda: monkey_terminal
-    ins.time.sleep = lambda s: None
+    # Replace insert's own reference, never time.sleep itself: that would turn every
+    # later test's sleep into a no-op.
+    ins.time = types.SimpleNamespace(sleep=lambda s: None)
     return rec
 
 
@@ -59,7 +62,7 @@ def test_make_inserter_default_is_clipboard():
 def test_make_inserter_wtype_on_wlroots():
     ins.is_wayland = lambda: True
     ins.is_wlroots = lambda: True
-    ins.shutil.which = lambda b: "/usr/bin/wtype" if b == "wtype" else None
+    ins.shutil = types.SimpleNamespace(which=lambda b: "/usr/bin/wtype" if b == "wtype" else None)
     assert ins.make_inserter(_cfg(insert_backend="auto")).name == "wtype"
 
 
@@ -99,7 +102,7 @@ def test_paste_keys_modes():
 
 
 def test_clipboard_saved_lazily_once_and_restored():
-    rec = _patch()
+    _patch()
     it = ins.ClipboardInserter(_cfg(paste_keys="ctrl+v"))
     it.clip = _FakeClip(value=b"USER-CLIP")
     it.insert("alpha")          # ascii: must NOT read the clipboard
@@ -112,7 +115,7 @@ def test_clipboard_saved_lazily_once_and_restored():
 
 
 def test_preserve_false_leaves_transcript():
-    rec = _patch()
+    _patch()
     it = ins.ClipboardInserter(_cfg(paste_keys="ctrl+v"))
     it.clip = _FakeClip()
     it.insert("ą")
