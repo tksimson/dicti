@@ -85,8 +85,13 @@ class DictiIndicator extends PanelMenu.Button {
         // START), "Stop dictation" while listening (sends STOP). You can't start twice,
         // so a single state-aware item is clearer than two. Greyed while transcribing.
         this._dictateItem = new PopupMenu.PopupMenuItem('Start dictation');
-        this._dictateItem.connect('activate', () =>
-            this._send(this._state === 'IDLE' ? 'START' : 'STOP'));
+        this._dictateItem.connect('activate', () => {
+            if (this._memoRecording())     // "Stop" during an mp3 recording = stop + save it
+                GLib.spawn_command_line_async(
+                    `${GLib.get_home_dir()}/.local/bin/dicti --memo-toggle`);
+            else
+                this._send(this._state === 'IDLE' ? 'START' : 'STOP');
+        });
         this.menu.addMenuItem(this._dictateItem);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -149,7 +154,25 @@ class DictiIndicator extends PanelMenu.Button {
             this._translateItem.setToggleState(on);
     }
 
+    // An mp3 recording (`dicti --memo-toggle`) shows as LISTENING. Its pidfile only counts
+    // while that PID is really a pw-record pipeline, so a stale file never sticks the icon.
+    _memoRecording() {
+        try {
+            const [ok, pid] = GLib.file_get_contents(GLib.build_filenamev(
+                [GLib.get_user_runtime_dir(), 'dicti-memo.pid']));
+            const p = ok ? new TextDecoder().decode(pid).trim() : '';
+            if (!/^\d+$/.test(p))
+                return false;
+            const [ok2, cmd] = GLib.file_get_contents(`/proc/${p}/cmdline`);
+            return ok2 && new TextDecoder().decode(cmd).includes('pw-record');
+        } catch (e) {
+            return false;
+        }
+    }
+
     _readState() {
+        if (this._memoRecording())
+            return 'LISTENING';
         try {
             const [ok, contents] = GLib.file_get_contents(this._statePath);
             if (ok)

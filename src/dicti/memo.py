@@ -48,12 +48,28 @@ def _last_dir_path() -> Path:
     return _config_path().parent / "memo-last-dir"
 
 
+# Drop the first 0.3s (the mic opening and the key click land there) and fade in; cut
+# rumble; lift the voice to a normal level (raw laptop-mic speech is very quiet), live.
+AUDIO_FILTER = ("atrim=start=0.3,asetpts=PTS-STARTPTS,afade=t=in:d=0.05,"
+                "highpass=f=80,dynaudnorm=f=200:g=15:m=20")
+
+
 def _pipeline(out: Path) -> list[str]:
     # pw-record writes a non-WAV container to a pipe, so hand ffmpeg raw PCM instead.
     return ["sh", "-c",
             "pw-record --raw --rate=48000 --channels=1 --format=s16 - | "
             "ffmpeg -hide_banner -nostdin -nostats -loglevel fatal -y "
-            "-f s16le -ar 48000 -ac 1 -i - -codec:a libmp3lame -q:a 2 " + shlex.quote(str(out))]
+            "-f s16le -ar 48000 -ac 1 -i - "
+            f"-af {AUDIO_FILTER} -codec:a libmp3lame -q:a 2 " + shlex.quote(str(out))]
+
+
+def _poke_indicator() -> None:
+    """Touch the daemon's state file, so the panel icon re-reads state now instead of on its
+    next 2s poll. The icon shows a running memo recording as LISTENING (pink)."""
+    try:
+        os.utime(_runtime_dir() / "dictation.state")
+    except OSError:
+        pass
 
 
 def _start(out: Path, detach: bool = False) -> subprocess.Popen:
@@ -163,11 +179,13 @@ def memo_toggle() -> int:
         work.unlink(missing_ok=True)
         proc = _start(work, detach=True)
         _pid_path().write_text(f"{proc.pid}\n")
+        _poke_indicator()
         _notify("Recording mp3", "Press Copilot again to stop and save")
         return 0
 
     _stop_group(pid)
     _pid_path().unlink(missing_ok=True)
+    _poke_indicator()
     work = _work_path()
     if not work.exists() or work.stat().st_size == 0:
         work.unlink(missing_ok=True)

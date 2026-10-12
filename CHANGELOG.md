@@ -9,7 +9,9 @@ All notable changes to dicti are documented here. Format loosely follows
 - **Record audio to mp3, no transcription.** `dicti -mp3 NAME` records to `./NAME.mp3` in the
   current directory (Enter or Ctrl+C stops). Ctrl+Copilot starts a recording from anywhere;
   pressing Copilot again stops it and opens a save dialog (Desktop first, then the folder you
-  last saved to). Files are encoded live and readable only by you.
+  last saved to). The panel icon is pink while it records. The voice is normalized to a
+  normal level and the click at the start is cut. Files are encoded live and readable only
+  by you.
 
 ### Changed
 - **Parakeet is the new default engine, and words appear about 5x sooner.** NVIDIA's

@@ -38,6 +38,8 @@ except (ValueError, ImportError):
 
 from gi.repository import Gio, GLib, Gtk
 
+from dicti import memo
+
 _XDG = os.environ.get("XDG_RUNTIME_DIR")
 if not _XDG:
     raise SystemExit("XDG_RUNTIME_DIR not set, indicator must run inside a logind user session")
@@ -120,6 +122,8 @@ class Indicator:
         menu.append(item)
 
     def _read_state(self) -> str:
+        if memo.running_pid() is not None:  # an mp3 recording shows as listening
+            return "LISTENING"
         try:
             return STATE_PATH.read_text().strip() or "IDLE"
         except OSError:
