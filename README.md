@@ -145,6 +145,8 @@ its `KEY_*` name and edit `keyd/default.conf`.
 - Lost a good dictation? `dictate-last` reprints the last one (`--copy` to clipboard).
 - **Speak any language, type English:** `dictate-translate` toggles Whisper's translate task
   (bind it to a key). One-directional, English is always the target (a Whisper limit).
+- **Just record audio:** `dicti -mp3 notes` saves `./notes.mp3` (Enter stops). Ctrl+Copilot
+  starts a recording, Copilot again stops it and asks where to save.
 
 ## Configuration
 

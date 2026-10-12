@@ -5,6 +5,12 @@ All notable changes to dicti are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Record audio to mp3, no transcription.** `dicti -mp3 NAME` records to `./NAME.mp3` in the
+  current directory (Enter or Ctrl+C stops). Ctrl+Copilot starts a recording from anywhere;
+  pressing Copilot again stops it and opens a save dialog (Desktop first, then the folder you
+  last saved to). Files are encoded live and readable only by you.
+
 ### Security
 - **Recordings are private and never kept.** The recording used to live at
   `/tmp/dictation-record.wav`, readable by every user on the machine, and stayed there until

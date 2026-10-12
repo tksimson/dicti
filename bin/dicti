@@ -1,0 +1,4 @@
+#!/bin/sh
+# dicti command line: audio memos (`dicti -mp3 NAME`, `dicti --memo-toggle`).
+# install/04-install-daemon.sh fills in @SRC@ with this repo's src/ dir.
+PYTHONPATH="@SRC@${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m dicti.memo "$@"

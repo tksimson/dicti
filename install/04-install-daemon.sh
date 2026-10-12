@@ -17,7 +17,9 @@ mkdir -p "$HOME/.local/bin" "$UNIT_DIR"
 
 install -m 0755 "$REPO_ROOT/bin/dictate-toggle" "$HOME/.local/bin/dictate-toggle"
 install -m 0755 "$REPO_ROOT/bin/dictate-translate" "$HOME/.local/bin/dictate-translate"
-echo "==> Installed ~/.local/bin/dictate-toggle, dictate-translate"
+sed "s|@SRC@|$SRC_DIR|g" "$REPO_ROOT/bin/dicti" > "$HOME/.local/bin/dicti"
+chmod 0755 "$HOME/.local/bin/dicti"
+echo "==> Installed ~/.local/bin/dictate-toggle, dictate-translate, dicti"
 
 # Render systemd units, substituting @SRC@ with this repo's src/ dir so the
 # units are machine-independent in the repo but correct once installed.

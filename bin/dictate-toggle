@@ -2,4 +2,10 @@
 # Send a command to the dicti dictation daemon.
 # Usage: dictate-toggle [START|STOP|TOGGLE|CANCEL|STATUS]
 # Default: TOGGLE.
+# While an mp3 recording (dicti --memo-toggle) runs, TOGGLE stops and saves it instead.
+if [ "${1:-TOGGLE}" = TOGGLE ]; then
+  pid=$(cat "$XDG_RUNTIME_DIR/dicti-memo.pid" 2>/dev/null) &&
+    grep -qs pw-record "/proc/$pid/cmdline" &&
+    exec "$HOME/.local/bin/dicti" --memo-toggle
+fi
 exec printf '%s' "${1:-TOGGLE}" | nc -U -q1 "$XDG_RUNTIME_DIR/dictation.sock"
