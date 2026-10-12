@@ -21,6 +21,7 @@ import threading
 import time
 import types
 import wave
+from pathlib import Path
 
 import _fake_requests  # noqa: F401  installs the fake before dicti.daemon imports requests
 
@@ -29,7 +30,7 @@ os.environ["XDG_RUNTIME_DIR"] = _tmp
 os.environ["XDG_CONFIG_HOME"] = _tmp
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from dicti.daemon import Daemon, State, SAMPLE_RATE, TMP_WAV  # noqa: E402
+from dicti.daemon import Daemon, State, SAMPLE_RATE, SOCK_PATH, TMP_WAV  # noqa: E402
 from dicti.config import Config  # noqa: E402
 
 
@@ -131,6 +132,52 @@ def test_no_refine_for_a_short_session():
     d.stop_and_transcribe()
     assert calls == [], "short session paid for an extra full-context pass"
     assert d.state == State.IDLE
+
+
+# --- recordings are private and never kept -------------------------------------
+
+def _recordings():
+    return sorted(TMP_WAV.parent.glob("dictation-*.wav"))
+
+
+def test_recording_lives_in_the_private_runtime_dir():
+    """Not /tmp: there every user on the machine could read what was dictated."""
+    assert TMP_WAV.parent == SOCK_PATH.parent, TMP_WAV   # the runtime dir the daemon uses
+    assert TMP_WAV.parent != Path("/tmp"), TMP_WAV
+
+
+def test_no_recording_kept_after_a_streaming_session():
+    d = _new_daemon()
+    _write_wav(1.0)
+    d.state = State.LISTENING
+    d._anchor_byte = 0
+    d._last_pass = (0, d._data_end(), ["hello"])
+    d._pass_done.set()
+    d.stop_and_transcribe()
+    assert _recordings() == [], _recordings()
+
+
+def test_no_recording_kept_after_a_batch_session():
+    d = _new_daemon(mode="batch")
+    _write_wav(1.0)
+    d.state = State.LISTENING
+    d._transcribe = lambda: "hello"
+    d.stop_and_transcribe()
+    assert _recordings() == [], _recordings()
+
+
+def test_no_recording_kept_when_transcription_fails():
+    d = _new_daemon(mode="batch")
+    _write_wav(1.0)
+    d.state = State.LISTENING
+
+    def broken():
+        raise RuntimeError("whisper-server down")
+
+    d._transcribe = broken
+    d.stop_and_transcribe()
+    assert d.state == State.IDLE
+    assert _recordings() == [], _recordings()
 
 
 # --- issue 2: the daemon must never go quietly dead ---------------------------

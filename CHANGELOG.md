@@ -3,6 +3,19 @@
 All notable changes to dicti are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are date-stamped.
 
+## [Unreleased]
+
+### Security
+- **Recordings are private and never kept.** The recording used to live at
+  `/tmp/dictation-record.wav`, readable by every user on the machine, and stayed there until
+  the next dictation. It now lives in your private runtime directory (`$XDG_RUNTIME_DIR`,
+  readable only by you, cleared at logout) and is deleted as soon as its session ends, also
+  when transcription fails. Leftovers from older versions in `/tmp` are removed at startup.
+
+### Fixed
+- The test suite no longer writes to the real recording path, and its tests pass in any
+  order.
+
 ## [0.3.8] - 2026-08-03
 
 Reliability release. Two things made dicti feel unreliable in daily use: it kept

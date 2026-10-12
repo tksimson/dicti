@@ -59,7 +59,9 @@ if not _XDG:
 SOCK_PATH = Path(_XDG) / "dictation.sock"
 STATE_PATH = Path(_XDG) / "dictation.state"
 TRANSLATE_PATH = Path(_XDG) / "dictation.translate"  # "ON"/"OFF", watched by the indicators
-TMP_WAV = Path("/tmp/dictation-record.wav")
+# The runtime dir is private to the user (0700) and RAM-backed. /tmp let any local user
+# read what was dictated. The recording is deleted as soon as its session ends.
+TMP_WAV = Path(_XDG) / "dictation-record.wav"
 
 SAMPLE_RATE = 16000
 BYTES_PER_SAMPLE = 2  # s16 mono
@@ -621,6 +623,7 @@ class Daemon:
             session_wav = self._detach_recording() if streaming else TMP_WAV
             seq = self._session_seq
 
+        to_delete = session_wav  # no recording outlives its session, error or not
         try:
             if streaming:
                 final_text = self._final_flush(session_wav)
@@ -641,9 +644,7 @@ class Daemon:
                         target=self._refine,
                         args=(session_wav, seq, best, self.cfg.preserve_clipboard),
                         daemon=True).start()
-                    session_wav = None
-                if session_wav is not None and session_wav != TMP_WAV:
-                    session_wav.unlink(missing_ok=True)
+                    to_delete = None  # _refine deletes it when done
             else:
                 text = self._clean_transcript(self._transcribe())
                 if text:
@@ -656,6 +657,8 @@ class Daemon:
             log.exception("Transcribe/insert failed")
             self.notify("dictation error", str(e)[:80], urgency="critical")
         finally:
+            if to_delete is not None:
+                to_delete.unlink(missing_ok=True)
             with self.lock:
                 self._set_state(State.IDLE)
                 self.processing_started_at = None
@@ -891,10 +894,13 @@ def preflight() -> None:
                     "wl-clipboard" if clip == "wl-copy" else "xclip")
     if not SOCK_PATH.parent.exists():
         raise SystemExit(f"XDG_RUNTIME_DIR missing: {SOCK_PATH.parent}")
-    # Session WAVs are handed to background refinement and deleted by it; a crash mid-refine
-    # would otherwise leave them behind.
-    for stale in TMP_WAV.parent.glob("dictation-session-*.wav"):
-        stale.unlink(missing_ok=True)
+    # A crash can leave a recording behind; versions before 0.3.9 also left one in /tmp.
+    legacy = Path("/tmp")  # noqa: S108  cleanup only, nothing is written there
+    for stale in [*TMP_WAV.parent.glob("dictation-*.wav"), *legacy.glob("dictation-*.wav")]:
+        try:
+            stale.unlink(missing_ok=True)
+        except PermissionError:  # another user's file in /tmp
+            pass
 
 
 def main() -> None:

@@ -102,7 +102,7 @@ Two small user services (`whisper-server`, `dictation`) plus a GNOME Shell exten
 
 ```
 [your key] -> keyd -> Super+Shift+Alt+F12 -> GNOME shortcut -> dictate-toggle
-   -> unix socket -> dictation daemon -> pw-record -> /tmp WAV
+   -> unix socket -> dictation daemon -> pw-record -> private WAV ($XDG_RUNTIME_DIR, deleted after each session)
    -> HTTP -> whisper-server (Vulkan) -> transcript -> ydotool / clipboard -> focused window
 ```
 
