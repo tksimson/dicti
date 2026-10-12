@@ -43,8 +43,9 @@
 
 ## Hey and welcome 
 
-dicti transcribes your speech on your **own machine** with
-[whisper.cpp](https://github.com/ggerganov/whisper.cpp) and types it into the focused window
+dicti transcribes your speech on your **own machine** with NVIDIA's
+[Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (or
+[whisper.cpp](https://github.com/ggerganov/whisper.cpp)) and types it into the focused window
 as you talk. No cloud, no account, nothing leaves your laptop.
 
 I built it because I missed the great dictation I had on the Mac, and Linux deserved one too.
@@ -70,21 +71,22 @@ windows, no notification on every word.
 ## What it does
 
 - **Click and Talk.** Live streaming: text shows up as you speak. Each pass
-  re-transcribes the whole thing, so whisper always has full context (quality matches
-  one-shot batch mode), and only words that have stabilised across passes get typed. It's
-  append-only, so it never rewrites text behind your cursor. To switch to all-at-once:
-  change `mode = "batch"`.
-- **No halucinations on silence.** whisper-server runs with voice-activity detection
-  (padded to not clip the first word), and the stabilise-across-passes rule is a second
-  filter, so the classic silence hallucinations never reach the screen.
-- **Speaks ~100 languages.** It's Whisper underneath, so whatever Whisper can transcribe, dicti
-  types. It auto-detects the language each pass, or you can pin one in config.
+  re-transcribes the sentence so far, so the model always has context, and only words that
+  have stabilised across passes get typed. It's append-only, so it never rewrites text
+  behind your cursor. To switch to all-at-once: change `mode = "batch"`.
+- **No halucinations on silence.** Parakeet stays silent on silence and noise; whisper-server
+  runs with voice-activity detection (padded to not clip the first word). The
+  stabilise-across-passes rule is a second filter on top.
+- **Two engines.** Parakeet (default) handles 25 European languages on the CPU, detects the
+  language itself, and in our Polish tests made a quarter fewer errors than Whisper medium
+  at 2-3x the speed. Set `engine = "whisper"` for Whisper's ~100 languages.
 - **Types anywhere.** ASCII goes in via `ydotool`; any non-ASCII (accents, Polish ąęóśżźćń, CJK,
   emoji) is pasted via the clipboard, so it works across editors, IDEs and terminals.
 - **Not in your face** No popup spam, no tray clutter, no notification on every word. The
   top-bar glyph (above) is all you normally see.
-- **Yours, offline.** whisper.cpp medium model, GPU-accelerated via Vulkan. Long sessions
-  (1-hour cap) with a smart silence auto-stop.
+- **Yours, offline.** Parakeet TDT v3 (int8, CPU) by default; whisper.cpp medium on the GPU
+  via Vulkan for other languages and translate. Long sessions (1-hour cap) with a smart
+  silence auto-stop.
 
 ## How it works
 
@@ -93,7 +95,7 @@ windows, no notification on every word.
        alt="dicti pipeline: a key tap reaches the dictation daemon, PipeWire records audio, whisper.cpp transcribes it offline on the GPU, and the text is typed or pasted into the focused window">
 </p>
 
-Two small user services (`whisper-server`, `dictation`) plus a GNOME Shell extension
+Three small user services (`parakeet-server`, `whisper-server`, `dictation`) plus a GNOME Shell extension
 (`dicti@local`) for the indicator. The daemon mirrors its state to
 `$XDG_RUNTIME_DIR/dictation.state` so the indicator can follow along.
 
@@ -103,7 +105,8 @@ Two small user services (`whisper-server`, `dictation`) plus a GNOME Shell exten
 ```
 [your key] -> keyd -> Super+Shift+Alt+F12 -> GNOME shortcut -> dictate-toggle
    -> unix socket -> dictation daemon -> pw-record -> private WAV ($XDG_RUNTIME_DIR, deleted after each session)
-   -> HTTP -> whisper-server (Vulkan) -> transcript -> ydotool / clipboard -> focused window
+   -> HTTP (localhost) -> parakeet-server (CPU) or whisper-server (Vulkan)
+   -> transcript -> ydotool / clipboard -> focused window
 ```
 
 For *why* insertion works the type-ASCII / paste-Unicode way, see
@@ -118,9 +121,9 @@ You'll need:
 - A Debian/Ubuntu-family distro (apt) with **PipeWire** audio
 - A **Vulkan-capable GPU** (integrated is fine; CPU works but is ~4-5x slower)
 - **GNOME Shell** (tested on 48) for the top-bar indicator
-- **~1GB disk** for whisper.cpp and the quantized medium model (the ~1.5GB full
-  model is downloaded once to quantize, then deleted). While running, the model
-  stays hot in RAM (~0.5GB) for instant transcription.
+- **~2GB disk**: ~1GB for whisper.cpp and the quantized medium model (the ~1.5GB full
+  model is downloaded once to quantize, then deleted), ~0.8GB for Parakeet and its venv.
+  While running, both models stay hot in RAM (~0.5GB + ~1.2GB) for instant transcription.
 
 ```bash
 git clone https://github.com/tksimson/dicti.git

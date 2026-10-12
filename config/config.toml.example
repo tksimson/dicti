@@ -1,9 +1,13 @@
 # dicti configuration, copy to ~/.config/dicti/config.toml and edit.
 # All keys are optional; anything omitted uses the built-in default shown here.
 
-# --- Whisper backend ---
-whisper_url = "http://127.0.0.1:8178/inference"
-language = "auto"            # "auto", "en", "pl", ... (whisper language code)
+# --- Speech-to-text engine ---
+engine = "parakeet"          # "parakeet" = Parakeet TDT v3 on CPU: faster, fewer Polish errors,
+                             #   25 European languages, detects the language itself.
+                             # "whisper"  = whisper-server on the GPU: 99 languages.
+parakeet_url = "http://127.0.0.1:8179/inference"
+whisper_url = "http://127.0.0.1:8178/inference"   # also serves translate, for either engine
+language = "auto"            # whisper only: "auto", "en", "pl", ... (whisper language code)
 translate = false            # Whisper's translate task: speak ANY language, get ENGLISH text.
                              #   One-directional: the target is always English (model limit;
                              #   English -> Polish etc. would need a separate translation model).
@@ -19,9 +23,10 @@ mode = "streaming"           # "streaming" = text appears phrase-by-phrase as yo
 # Streaming tuning (only used when mode = "streaming"). Each pass re-transcribes the whole
 # utterance so far (full context = best quality) and types only the words that have
 # stabilised. Append-only: text already typed is never rewritten.
-stream_interval_sec = 2.0    # target seconds between transcription passes. Lower = snappier
+# Left unset, both follow the engine: parakeet 0.5 / 12, whisper 2.0 / 60.
+# stream_interval_sec = 0.5  # target seconds between transcription passes. Lower = snappier
                              #   but more inference load; higher = calmer, slightly laggier.
-max_context_sec = 60.0       # cap the re-transcribed window. Past this the text so far is
+# max_context_sec = 12.0     # cap the re-transcribed window. Past this the text so far is
                              #   committed and a fresh context window starts, so a very long
                              #   dictation doesn't make each pass slower without bound.
 stream_max_failures = 3      # consecutive failed passes (whisper down, connection dropped)

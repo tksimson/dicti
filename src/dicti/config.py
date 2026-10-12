@@ -22,11 +22,23 @@ def _config_path() -> Path:
     return Path(base) / "dicti" / "config.toml"
 
 
+# (stream_interval_sec, max_context_sec) per engine. Whisper medium passes average ~1.1s
+# on the GPU. Parakeet does a 12s window in ~0.8s on 8 CPU threads; measured on live-paced
+# Polish speech, 0.5s/12s typed words ~1-2s after they were spoken (Whisper: 8-10s) with no
+# loss in accuracy, beating both 0.7s/20s and 0.3s/20s.
+ENGINE_STREAM_DEFAULTS = {"whisper": (2.0, 60.0), "parakeet": (0.5, 12.0)}
+
+
 @dataclass
 class Config:
-    # Whisper backend
+    # Speech-to-text engine. "parakeet" (default): Parakeet TDT v3 on CPU, fewer Polish
+    # errors and 2-3x faster passes than Whisper medium, 25 European languages, detects the
+    # language itself. "whisper": whisper-server, 99 languages. Translate always goes to
+    # whisper-server: Parakeet cannot translate.
+    engine: str = "parakeet"
+    parakeet_url: str = "http://127.0.0.1:8179/inference"
     whisper_url: str = "http://127.0.0.1:8178/inference"
-    language: str = "auto"  # "auto", "en", "pl", ...
+    language: str = "auto"  # whisper only: "auto", "en", "pl", ...
     translate: bool = False  # Whisper's built-in translate task: ANY language -> English.
     #                          One-directional (target is always English; this is a model
     #                          limit, not a setting). Runtime-toggleable via the TRANSLATE
@@ -39,9 +51,11 @@ class Config:
     # Streaming tuning, only used when mode == "streaming". Each pass re-transcribes the
     # whole utterance so far (full context = best quality) and appends only the words that
     # have stabilised across passes. Append-only: text behind the cursor is never rewritten.
-    stream_interval_sec: float = 2.0     # target seconds between transcription passes
-    max_context_sec: float = 60.0        # cap the re-transcribed window; past this the text
-    #                                      so far is committed and a fresh context window starts
+    # Unset = the engine's default (ENGINE_STREAM_DEFAULTS): pass cost grows with the
+    # window, so the faster engine gets both a shorter interval and a shorter window.
+    stream_interval_sec: float | None = None  # target seconds between transcription passes
+    max_context_sec: float | None = None      # cap the re-transcribed window; past this the
+    #                                           text so far is committed and a fresh window starts
     stream_max_failures: int = 3         # consecutive failed passes before the session aborts
     #                                      with a visible error instead of listening silently
 
@@ -85,24 +99,30 @@ class Config:
     #   "all":             also show routine status (done / empty / busy / cancelled)
     notify_level: str = "error"
 
+    def __post_init__(self) -> None:
+        if self.engine not in ENGINE_STREAM_DEFAULTS:
+            log.warning("Unknown engine %r; using parakeet", self.engine)
+            self.engine = "parakeet"
+        interval, context = ENGINE_STREAM_DEFAULTS[self.engine]
+        if self.stream_interval_sec is None:
+            self.stream_interval_sec = interval
+        if self.max_context_sec is None:
+            self.max_context_sec = context
+
     @classmethod
     def load(cls) -> "Config":
         path = _config_path()
-        cfg = cls()
         if not path.exists():
             log.info("No config at %s; using defaults", path)
-            return cfg
+            return cls()
         try:
             with path.open("rb") as f:
                 data = tomllib.load(f)
         except Exception as e:
             log.warning("Failed to read %s (%s); using defaults", path, e)
-            return cfg
+            return cls()
         known = {f.name for f in fields(cls)}
-        for key, value in data.items():
-            if key in known:
-                setattr(cfg, key, value)
-            else:
-                log.warning("Ignoring unknown config key: %s", key)
+        for key in data.keys() - known:
+            log.warning("Ignoring unknown config key: %s", key)
         log.info("Loaded config from %s", path)
-        return cfg
+        return cls(**{k: v for k, v in data.items() if k in known})

@@ -101,15 +101,41 @@ def _is_hallucination(normalized: str) -> bool:
     return normalized in _HALLUCINATION_PHRASES or "amara.org" in normalized
 
 
+_EDGE_PUNCT = ".,;:!?…\"'„”“«»()[]-–—"
+
+
+def _word_key(word: str) -> str:
+    return word.strip(_EDGE_PUNCT).casefold()
+
+
 def _common_prefix(a: list[str], b: list[str]) -> list[str]:
-    """Longest leading run of words shared by two word lists. Used to find the text that
-    has stabilised across two consecutive re-transcription passes (safe to commit)."""
+    """Longest leading run of words shared by two word lists, as spelled in `a`. Used to
+    find the text that has stabilised across two consecutive re-transcription passes (safe
+    to commit). Case and edge punctuation are ignored: a growing window keeps flipping
+    "Safari"/"safari" and "dzień."/"dzień," and an exact match held back everything after."""
     out = []
     for x, y in zip(a, b, strict=False):
-        if x != y:
+        if _word_key(x) != _word_key(y):
             break
         out.append(x)
     return out
+
+
+def _typed_end(typed: list[str], words: list[str]) -> int | None:
+    """Index in a fresh pass's `words` where the already-typed text ends, or None if it
+    can't be located. A re-transcription can split or merge a word it already produced
+    ("podziwiana" -> "podziwia na"), shifting every later index, so the end is found by
+    matching the last typed words near their expected position (nearest offset first).
+    Two words are tried before one, since the word before the last can be re-heard too."""
+    if not typed:
+        return 0
+    n = len(typed)
+    keys = [_word_key(w) for w in words]
+    for anchor in ([_word_key(w) for w in typed[-2:]], [_word_key(typed[-1])]):
+        for p in (n, n + 1, n - 1, n + 2, n - 2, n + 3, n - 3):
+            if len(anchor) <= p <= len(keys) and keys[p - len(anchor):p] == anchor:
+                return p
+    return None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -414,15 +440,22 @@ class Daemon:
                     with self._flush_lock:
                         if end - anchor >= max_ctx_bytes:
                             # window full: commit everything and re-anchor for bounded cost
-                            self._emit_words(words[len(self._displayed_words):])
+                            self._emit_words(self._untyped(words))
                             self._anchor_byte = end
                             self._displayed_words = []
                             prev_words = []
                         else:
-                            stable = _common_prefix(words, prev_words)
-                            if len(stable) > len(self._displayed_words):
-                                self._emit_words(stable[len(self._displayed_words):])
-                                self._displayed_words = stable
+                            # Only the words after the typed text must agree: typed words
+                            # are final, so a pass re-hearing one of them differently must
+                            # not hold back the rest of the sentence.
+                            shown = self._displayed_words
+                            start = _typed_end(shown, words)
+                            prev_start = _typed_end(shown, prev_words)
+                            if start is not None and prev_start is not None:
+                                new = _common_prefix(words[start:], prev_words[prev_start:])
+                                if new:
+                                    self._emit_words(new)
+                                    self._displayed_words = shown + new
                             prev_words = words
                 failures = 0
             except Exception as e:
@@ -453,6 +486,12 @@ class Daemon:
             return False
         rec = self.recorder
         return rec is not None and rec.poll() is not None
+
+    def _untyped(self, words: list[str]) -> list[str]:
+        """The part of a pass not typed yet, for commits that can't wait for agreement
+        (window full, STOP). Falls back to word count when the typed text can't be found."""
+        start = _typed_end(self._displayed_words, words)
+        return words[len(self._displayed_words) if start is None else start:]
 
     def _emit_words(self, new_words: list[str]) -> None:
         """Insert a list of newly-stable words, append-only, space-joined. Caller holds
@@ -490,9 +529,10 @@ class Daemon:
             pcm = self._read_pcm(self._anchor_byte, end, path)
             words = self._clean_transcript(self._transcribe_pcm(pcm)).split() if pcm else []
         with self._flush_lock:
-            if len(words) > len(self._displayed_words):
-                self._emit_words(words[len(self._displayed_words):])
-                self._displayed_words = words
+            tail = self._untyped(words)
+            if tail:
+                self._emit_words(tail)
+                self._displayed_words = self._displayed_words + tail
         return " ".join(words)
 
     def _reusable_pass(self, end: int, path: Path) -> list[str] | None:
@@ -770,6 +810,12 @@ class Daemon:
         """Transcribe a raw PCM buffer (streaming segment) by wrapping it in a WAV."""
         return self._post_inference(io.BytesIO(self._wav_bytes(pcm)))
 
+    def _inference_url(self) -> str:
+        # Translate is Whisper-only: Parakeet has no translate task.
+        if self.translate or self.cfg.engine == "whisper":
+            return self.cfg.whisper_url
+        return self.cfg.parakeet_url
+
     def _post_inference(self, fileobj) -> str:
         t0 = time.monotonic()
         data = {"language": self.cfg.language, "response_format": "json"}
@@ -778,7 +824,7 @@ class Daemon:
             # regardless of spoken language. Only English output is possible (model limit).
             data["translate"] = "true"
         r = requests.post(
-            self.cfg.whisper_url,
+            self._inference_url(),
             files={"file": ("audio.wav", fileobj, "audio/wav")},
             data=data,
             timeout=120,

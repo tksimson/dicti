@@ -11,6 +11,18 @@ All notable changes to dicti are documented here. Format loosely follows
   pressing Copilot again stops it and opens a save dialog (Desktop first, then the folder you
   last saved to). Files are encoded live and readable only by you.
 
+### Changed
+- **Parakeet is the new default engine, and words appear about 5x sooner.** NVIDIA's
+  Parakeet TDT v3 runs on the CPU as a new `parakeet-server` service. On Google's FLEURS test
+  set it made a quarter fewer Polish errors than Whisper medium (11.4% vs 15.0%), at 2-3x the
+  speed; English is slightly behind (6.7% vs 5.8%). On live-paced speech, words are typed
+  ~1-2s after you say them instead of 8-10s. Whisper stays installed: `engine = "whisper"`
+  switches back, and translate always uses it, since Parakeet cannot translate. Parakeet
+  covers 25 European languages; use Whisper for the others.
+- Streaming no longer holds back a sentence when a pass re-hears a word that is already
+  typed, or flips only its case or punctuation. Only the words after the typed text must
+  agree across passes.
+
 ### Security
 - **Recordings are private and never kept.** The recording used to live at
   `/tmp/dictation-record.wav`, readable by every user on the machine, and stayed there until

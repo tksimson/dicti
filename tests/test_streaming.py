@@ -23,7 +23,7 @@ os.environ["XDG_RUNTIME_DIR"] = _tmp
 os.environ["XDG_CONFIG_HOME"] = _tmp
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from dicti.daemon import Daemon, _common_prefix, SAMPLE_RATE  # noqa: E402
+from dicti.daemon import Daemon, _common_prefix, _typed_end, SAMPLE_RATE  # noqa: E402
 from dicti.config import Config  # noqa: E402
 
 
@@ -63,6 +63,45 @@ def test_common_prefix():
     assert _common_prefix("a b".split(), "x".split()) == []
     assert _common_prefix([], ["a"]) == []
     assert _common_prefix("one two".split(), "one two three".split()) == ["one", "two"]
+
+
+def test_common_prefix_ignores_case_and_edge_punctuation():
+    new, old = "Terminu safari, odnosi".split(), "terminu Safari. odnosi się".split()
+    assert _common_prefix(new, old) == new, "case/punctuation flips must not block commit"
+    assert _common_prefix("użycie terminu".split(), "uczcie terminu".split()) == []
+
+
+def test_typed_end_survives_a_re_heard_word():
+    typed = "Popularne użycie terminu safari".split()
+    assert _typed_end(typed, "Popularne uczcie terminu Safari, odnosi".split()) == 4
+    assert _typed_end(typed, "Popular ne użycie terminu safari odnosi".split()) == 5  # split
+    assert _typed_end(typed, "Popularneużycie terminu safari odnosi".split()) == 3  # merged
+    assert _typed_end(typed, "zupełnie inny tekst tutaj".split()) is None
+    assert _typed_end([], "a b".split()) == 0
+
+
+def test_stream_loop_types_new_words_when_an_earlier_word_flips():
+    d = _new_daemon()
+    d.cfg.stream_interval_sec = 0.01
+    _write_wav(loud_sec=2.0)
+    passes = iter([
+        "Popularne użycie terminu",
+        "Popularne użycie terminu safari",
+        "Popularne uczcie terminu safari odnosi",   # 'użycie' re-heard, already typed
+        "Popularne użycie terminu safari odnosi się",
+    ])
+
+    def fake(pcm):
+        try:
+            return next(passes)
+        except StopIteration:
+            d.silence_stop.set()
+            return "Popularne użycie terminu safari odnosi się"
+
+    d._transcribe_pcm = fake
+    d._stream_loop()
+    typed = " ".join(d.inserter.typed).split()
+    assert typed == "Popularne użycie terminu safari odnosi".split(), typed
 
 
 def test_growing_window_append_only():

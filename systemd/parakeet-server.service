@@ -1,0 +1,20 @@
+[Unit]
+Description=Parakeet TDT v3 speech-to-text server (CPU, model hot in RAM)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# @SRC@ is substituted with the repo's src/ dir by install/03b-install-parakeet.sh
+Environment=PYTHONPATH=@SRC@
+ExecStart=%h/opt/parakeet/venv/bin/python -m dicti.parakeet_server \
+  --model-dir %h/opt/parakeet/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8 \
+  --port 8179 \
+  --threads 8
+Restart=on-failure
+RestartSec=2
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=graphical-session.target

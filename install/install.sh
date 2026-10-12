@@ -28,6 +28,7 @@ read -rp "Phase 0 added you to the 'input' group. If this is the first run, log 
 run "Phase 1: keyd remap (sudo)"                     sudo bash 01-install-keyd.sh
 run "Phase 2: build whisper.cpp + model"             bash 02-build-whisper.sh
 run "Phase 3: whisper-server user service"           bash 03-install-whisper-server.sh
+run "Phase 3b: parakeet-server (default engine)"     bash 03b-install-parakeet.sh
 run "Phase 4: dictation daemon + indicator"          bash 04-install-daemon.sh
 run "Phase 5a: ydotool user service"                 bash 05-install-ydotool.sh
 run "Phase 5b: GNOME shortcut binding"               bash 06-bind-shortcuts.sh
