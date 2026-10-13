@@ -5,6 +5,11 @@ All notable changes to dicti are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-13
+
+New engine release: Parakeet is the default, words appear about 5x sooner, Polish types
+without touching the clipboard, and dicti can now just record audio to mp3.
+
 ### Added
 - **Record audio to mp3, no transcription.** `dicti -mp3 NAME` records to `./NAME.mp3` in the
   current directory (Enter or Ctrl+C stops). Ctrl+Copilot starts a recording from anywhere;
