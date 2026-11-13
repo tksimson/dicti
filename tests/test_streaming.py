@@ -125,6 +125,35 @@ def test_pause_does_not_commit_a_provisional_full_stop():
     assert "razie." not in typed and "razie" in typed, typed
 
 
+def test_streaming_commits_a_stable_final_word_after_a_quiet_pause():
+    d = _new_daemon()
+    d.cfg.stream_interval_sec = 0.01
+    _write_wav(loud_sec=2.0)
+    observed = {}
+    step = 0
+
+    def transcribe(pcm):
+        nonlocal step
+        step += 1
+        observed[step] = d._session_text
+        if step == 3:
+            _write_wav(loud_sec=2.0, quiet_sec=1.2)
+        if step == 5:
+            _write_wav(loud_sec=4.0, quiet_sec=1.2)
+        if step == 8:
+            d.silence_stop.set()
+        return "One two three." if step <= 5 else "One two three. Four five."
+
+    d._transcribe_pcm = transcribe
+    d._stream_loop()
+    assert observed[2] == ""
+    assert observed[3] == "One two"
+    assert observed[5] == "One two three."
+    assert d._session_text == "One two three. Four five."
+    assert d._final_flush(Path(_wav_path())) == d._session_text
+    assert d._session_text == "One two three. Four five."
+
+
 def test_growing_window_append_only():
     # Three passes of a growing utterance; only stable words get typed, with separators.
     d = _new_daemon()
@@ -200,6 +229,17 @@ def test_final_flush_transcribes_when_audio_grew():
     _req.next_text = "alpha beta"
     d._final_flush(Path(_wav_path()))
     assert d._session_text == "alpha beta", d._session_text
+
+
+def test_final_flush_transcribes_speech_under_half_a_second():
+    d = _new_daemon()
+    _commit_pass(d, "alpha beta".split())
+    _write_wav(loud_sec=1.3)
+    d._last_pass = (0, SAMPLE_RATE * 2, ["alpha", "beta"])
+    d._pass_done.set()
+    _req.next_text = "alpha beta gamma"
+    d._final_flush(Path(_wav_path()))
+    assert d._session_text == "alpha beta gamma"
 
 
 def test_final_flush_reuses_a_pass_when_the_tail_is_silence():

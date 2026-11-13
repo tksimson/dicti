@@ -5,6 +5,11 @@ All notable changes to dicti are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- Streaming dictation types the final stable word after a brief pause and keeps listening.
+- Stopping dictation checks for speech after the last streaming pass, even when less than
+  half a second of audio remains.
+
 ## [0.4.0] - 2026-10-13
 
 New engine release: Parakeet is the default, words appear about 5x sooner, Polish types
