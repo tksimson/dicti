@@ -72,8 +72,9 @@ windows, no notification on every word.
 
 - **Click and Talk.** Live streaming: text shows up as you speak. Each pass
   re-transcribes the sentence so far, so the model always has context, and only words that
-  have stabilised across passes get typed. It's append-only, so it never rewrites text
-  behind your cursor. To switch to all-at-once: change `mode = "batch"`.
+  have stabilised across passes get typed. The final word appears after about a second
+  of quiet, and dictation keeps listening. Streaming never rewrites text behind your
+  cursor. Set `mode = "batch"` to get the transcript all at once.
 - **No halucinations on silence.** Parakeet stays silent on silence and noise; whisper-server
   runs with voice-activity detection (padded to not clip the first word). The
   stabilise-across-passes rule is a second filter on top.

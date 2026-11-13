@@ -68,6 +68,7 @@ BYTES_PER_SAMPLE = 2  # s16 mono
 WAV_HEADER_BYTES = 44
 MIN_PASS_BYTES = SAMPLE_RATE * BYTES_PER_SAMPLE // 2  # ~0.5s: shortest worthwhile pass
 PASS_WAIT_SEC = 60  # how long the final flush waits for an in-flight streaming pass
+STREAM_PAUSE_SEC = 1.0  # quiet audio before committing a stable final word
 TAIL_CHECK_SEC = 0.25  # RMS window when deciding whether the un-transcribed tail is silence
 
 # A segment that is wholly a non-speech annotation, e.g. "[Silence]", "[ Foreign
@@ -415,6 +416,7 @@ class Daemon:
         and a fresh context window starts, to bound the per-pass cost. The session
         auto-stops after silence_timeout_sec with no newly committed words."""
         max_ctx_bytes = int(self.cfg.max_context_sec * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        pause_bytes = int(STREAM_PAUSE_SEC * SAMPLE_RATE) * BYTES_PER_SAMPLE
         prev_words: list[str] = []
         failures = 0
         self._last_progress = time.monotonic()
@@ -435,9 +437,9 @@ class Daemon:
                     # flush can reuse the result instead of paying for another inference.
                     self._last_pass = (anchor, end, words)
                     self._pass_done.set()
-                    if self.silence_stop.is_set():
-                        return  # a STOP raced in; let the final flush be authoritative
                     with self._flush_lock:
+                        if self.silence_stop.is_set():
+                            return  # a STOP raced in; let the final flush be authoritative
                         if end - anchor >= max_ctx_bytes:
                             # window full: commit everything and re-anchor for bounded cost
                             self._emit_words(self._untyped(words))
@@ -447,14 +449,17 @@ class Daemon:
                         else:
                             # Only the words after the typed text must agree: typed words
                             # are final, so a pass re-hearing one of them differently must
-                            # not hold back the rest of the sentence. The pass's last word
-                            # waits for a successor (or STOP): at a pause the model ends it
-                            # with a full stop that the next words would have removed.
+                            # not hold back the rest of the sentence. Hold back the last
+                            # word and its tentative punctuation until a pause in speech.
                             shown = self._displayed_words
                             start = _typed_end(shown, words)
                             prev_start = _typed_end(shown, prev_words)
                             if start is not None and prev_start is not None:
-                                new = _common_prefix(words[start:-1], prev_words[prev_start:])
+                                new = _common_prefix(words[start:], prev_words[prev_start:])
+                                if new and start + len(new) == len(words):
+                                    if end - anchor < pause_bytes or self._range_has_speech(
+                                            end - pause_bytes, end):
+                                        new.pop()
                                 if new:
                                     self._emit_words(new)
                                     self._displayed_words = shown + new
@@ -547,7 +552,7 @@ class Daemon:
         last = self._last_pass
         if not last or last[0] != self._anchor_byte or last[1] > end:
             return None
-        if end - last[1] >= MIN_PASS_BYTES and self._range_has_speech(last[1], end, path):
+        if self._range_has_speech(last[1], end, path):
             return None
         return last[2]
 
