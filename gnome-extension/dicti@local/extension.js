@@ -6,6 +6,10 @@
  *   IDLE       static "trapezoid" mic silhouette, deep green
  *   LISTENING  organic equalizer bounce (random walk), pink
  *   PROCESSING left->right "fill" progress, deep green
+ *   PREPARING  small centred capsules breathing, green (voice loading, reading aloud)
+ *   SPEAKING   calm ripple out from the middle bar, green (reading aloud)
+ * Mic states grow from the floor (sound in); speak states grow from the midline
+ * (sound out). Pink is kept for "the mic is live".
  *
  * A click opens the menu: Start / Stop dictation plus a "Translate to English"
  * switch (mirrors $XDG_RUNTIME_DIR/dictation.translate). No AppIndicator needed,
@@ -46,8 +50,30 @@ const FILL_STAGGER = 160;   // ms, per-bar delay in the fill
 // IDLE "trapezoid" mic: three tall middle bars + short shoulders (0..1).
 const IDLE_HEIGHTS = [0.5, 1.0, 1.0, 1.0, 0.5];
 
+// Reading aloud (design: speak-ux mockups). Times in ms.
+const SPEAK_PERIOD = 960;   // one outward ripple
+const SPEAK_LAG = 110;      // per bar away from the centre, so the middle leads
+const SPEAK_MIN = 0.22;
+const SPEAK_AMP = [0.50, 0.75, 1.00, 0.75, 0.50];
+const PREP_PERIOD = 1400;   // one breath
+const PREP_LAG = 60;
+const PREP_LO = 0.18, PREP_HI = 0.38;
+const PREP_ALPHA_LO = 0.55;
+const SPEAK_STATES = ['PREPARING', 'SPEAKING'];
+const DICTI = `${GLib.get_home_dir()}/.local/bin/dicti`;
+// Reading-aloud choices, saved by `dicti --speak-voice/--speak-speed` (src/dicti/speak.py).
+const SPEAK_VOICES = [['F1', 'Female 1'], ['F3', 'Female 2'], ['M1', 'Male 1'], ['M4', 'Male 2']];
+const SPEAK_SPEEDS = [['slower', 'Slower'], ['normal', 'Normal'], ['faster', 'Faster']];
+const SPEAK_DEFAULTS = {voice: 'F1', speed: 'normal'};
+
 function clamp(v, lo, hi) {
     return v < lo ? lo : v > hi ? hi : v;
+}
+
+// 0..1..0 cosine wave for bar i, delayed by its distance from the centre bar.
+function centreWave(nowMs, i, period, lag) {
+    const ph = (nowMs - Math.abs(i - 2) * lag) / period;
+    return 0.5 - 0.5 * Math.cos(2 * Math.PI * ph);
 }
 
 // One bar's height (0..1) in the processing "fill" cycle, given global ms.
@@ -87,12 +113,37 @@ class DictiIndicator extends PanelMenu.Button {
         this._dictateItem = new PopupMenu.PopupMenuItem('Start dictation');
         this._dictateItem.connect('activate', () => {
             if (this._memoRecording())     // "Stop" during an mp3 recording = stop + save it
-                GLib.spawn_command_line_async(
-                    `${GLib.get_home_dir()}/.local/bin/dicti --memo-toggle`);
+                GLib.spawn_command_line_async(`${DICTI} --memo-toggle`);
+            else if (SPEAK_STATES.includes(this._state))    // "Stop reading"
+                GLib.spawn_command_line_async(`${DICTI} --speak-toggle`);
             else
                 this._send(this._state === 'IDLE' ? 'START' : 'STOP');
         });
         this.menu.addMenuItem(this._dictateItem);
+
+        // The way in without a Copilot key; only shown when idle. Opening the menu keeps
+        // the primary selection, so the highlighted text is still there.
+        this._readItem = new PopupMenu.PopupMenuItem('Read highlighted text');
+        this._readItem.connect('activate',
+            () => GLib.spawn_command_line_async(`${DICTI} --speak-toggle`));
+        this.menu.addMenuItem(this._readItem);
+
+        // Voice and speed for reading aloud; the check marks follow speak.json on each open.
+        this._speakChoices = {};
+        for (const [key, title, options] of [['voice', 'Voice', SPEAK_VOICES],
+            ['speed', 'Speed', SPEAK_SPEEDS]]) {
+            const sub = new PopupMenu.PopupSubMenuMenuItem(title);
+            this._speakChoices[key] = options.map(([value, label]) => {
+                const item = sub.menu.addAction(label, () => GLib.spawn_command_line_async(
+                    `${DICTI} --speak-${key} ${value}`));
+                return [value, item];
+            });
+            this.menu.addMenuItem(sub);
+        }
+        this.menu.connect('open-state-changed', (_m, open) => {
+            if (open)
+                this._updateSpeakChoices();
+        });
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         // Whisper's translate task: speak any language, type English. The switch
@@ -154,33 +205,75 @@ class DictiIndicator extends PanelMenu.Button {
             this._translateItem.setToggleState(on);
     }
 
-    // An mp3 recording (`dicti --memo-toggle`) shows as LISTENING. Its pidfile only counts
-    // while that PID is really a pw-record pipeline, so a stale file never sticks the icon.
-    _memoRecording() {
+    _updateSpeakChoices() {
+        let saved = {};
+        try {
+            const [ok, contents] = GLib.file_get_contents(GLib.build_filenamev(
+                [GLib.get_user_config_dir(), 'dicti', 'speak.json']));
+            if (ok)
+                saved = JSON.parse(new TextDecoder().decode(contents)) ?? {};
+        } catch (e) {
+            // nothing chosen yet: defaults
+        }
+        for (const [key, items] of Object.entries(this._speakChoices)) {
+            const values = items.map(([v]) => v);
+            const current = values.includes(saved[key]) ? saved[key] : SPEAK_DEFAULTS[key];
+            for (const [value, item] of items) {
+                item.setOrnament(value === current     // radio-style, like GNOME's own
+                    ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NO_DOT);
+            }
+        }
+    }
+
+    // A pidfile only counts while that PID is alive with `marker` in its cmdline, so a
+    // stale file (killed process, reused PID) never sticks the icon.
+    _ownedPid(name, marker) {
         try {
             const [ok, pid] = GLib.file_get_contents(GLib.build_filenamev(
-                [GLib.get_user_runtime_dir(), 'dicti-memo.pid']));
+                [GLib.get_user_runtime_dir(), name]));
             const p = ok ? new TextDecoder().decode(pid).trim() : '';
             if (!/^\d+$/.test(p))
                 return false;
             const [ok2, cmd] = GLib.file_get_contents(`/proc/${p}/cmdline`);
-            return ok2 && new TextDecoder().decode(cmd).includes('pw-record');
+            return ok2 && new TextDecoder().decode(cmd).includes(marker);
         } catch (e) {
             return false;
         }
     }
 
+    // An mp3 recording (`dicti --memo-toggle`) shows as LISTENING.
+    _memoRecording() {
+        return this._ownedPid('dicti-memo.pid', 'pw-record');
+    }
+
+    // Reading aloud (`dicti --speak-toggle`): PREPARING until the worker writes SPEAKING
+    // to dicti-speak.phase at the first sound; null when not reading.
+    _speakPhase() {
+        if (!this._ownedPid('dicti-speak.pid', 'dicti.tts_worker'))
+            return null;
+        try {
+            const [ok, contents] = GLib.file_get_contents(GLib.build_filenamev(
+                [GLib.get_user_runtime_dir(), 'dicti-speak.phase']));
+            if (ok && new TextDecoder().decode(contents).trim() === 'SPEAKING')
+                return 'SPEAKING';
+        } catch (e) {
+            // no phase file yet = still getting the voice ready
+        }
+        return 'PREPARING';
+    }
+
     _readState() {
         if (this._memoRecording())
             return 'LISTENING';
+        let state = 'IDLE';
         try {
             const [ok, contents] = GLib.file_get_contents(this._statePath);
             if (ok)
-                return (new TextDecoder().decode(contents)).trim() || 'IDLE';
+                state = (new TextDecoder().decode(contents)).trim() || 'IDLE';
         } catch (e) {
             // file may not exist yet
         }
-        return 'IDLE';
+        return state !== 'IDLE' ? state : (this._speakPhase() ?? 'IDLE');
     }
 
     _updateDictateItem() {
@@ -188,9 +281,12 @@ class DictiIndicator extends PanelMenu.Button {
             return;
         // IDLE -> "Start dictation"; LISTENING -> "Stop dictation"; PROCESSING ->
         // greyed (recording already stopped, transcription in flight, nothing to do).
-        this._dictateItem.label.text =
-            this._state === 'IDLE' ? 'Start dictation' : 'Stop dictation';
+        // Reading aloud -> "Stop reading".
+        const speaking = SPEAK_STATES.includes(this._state);
+        this._dictateItem.label.text = this._state === 'IDLE' ? 'Start dictation'
+            : speaking ? 'Stop reading' : 'Stop dictation';
         this._dictateItem.setSensitive(this._state !== 'PROCESSING');
+        this._readItem.visible = this._state === 'IDLE';
     }
 
     _update() {
@@ -250,11 +346,26 @@ class DictiIndicator extends PanelMenu.Button {
     _heights() {
         if (this._state === 'LISTENING')
             return this._eqCur;
-        if (this._state === 'PROCESSING') {
-            const now = GLib.get_monotonic_time() / 1000;
+        const now = GLib.get_monotonic_time() / 1000;
+        if (this._state === 'PROCESSING')
             return Array.from({length: N_BARS}, (_, i) => fillHeight(now, i));
+        if (this._state === 'PREPARING') {
+            return Array.from({length: N_BARS}, (_, i) =>
+                PREP_LO + (PREP_HI - PREP_LO) * centreWave(now, i, PREP_PERIOD, PREP_LAG));
+        }
+        if (this._state === 'SPEAKING') {
+            return Array.from({length: N_BARS}, (_, i) => SPEAK_MIN +
+                SPEAK_AMP[i] * (1 - SPEAK_MIN) * centreWave(now, i, SPEAK_PERIOD, SPEAK_LAG));
         }
         return IDLE_HEIGHTS;
+    }
+
+    // Preparing breathes in opacity as well as height; everything else is opaque.
+    _alpha(i) {
+        if (this._state !== 'PREPARING')
+            return 1.0;
+        const now = GLib.get_monotonic_time() / 1000;
+        return PREP_ALPHA_LO + (1 - PREP_ALPHA_LO) * centreWave(now, i, PREP_PERIOD, PREP_LAG);
     }
 
     _repaint(area) {
@@ -263,7 +374,7 @@ class DictiIndicator extends PanelMenu.Button {
             const [w, h] = area.get_surface_size();
             cr = area.get_context();
             const [r, g, b] = this._state === 'LISTENING' ? PINK : GREEN;
-            cr.setSourceRGBA(r, g, b, 1.0);
+            const centred = SPEAK_STATES.includes(this._state);
 
             const gap = Math.max(1, Math.round(w * 0.09));
             const barW = (w - gap * (N_BARS - 1)) / N_BARS;
@@ -274,10 +385,13 @@ class DictiIndicator extends PanelMenu.Button {
             const heights = this._heights();
 
             for (let i = 0; i < N_BARS; i++) {
+                cr.setSourceRGBA(r, g, b, this._alpha(i));
                 const bh = Math.max(rad * 1.2, clamp(heights[i], 0, 1) * maxH);
                 const x = i * (barW + gap);
-                const y = baseY - bh;
-                this._roundedTopBar(cr, x, y, barW, bh, rad);
+                if (centred)    // sound out: grows both ways from the midline
+                    this._capsule(cr, x, h / 2 - bh / 2, barW, Math.max(bh, barW), barW / 2);
+                else
+                    this._roundedTopBar(cr, x, baseY - bh, barW, bh, rad);
                 cr.fill();
             }
         } catch (e) {
@@ -296,6 +410,14 @@ class DictiIndicator extends PanelMenu.Button {
         cr.arc(x + w - r, y + r, r, Math.PI + HALF_PI, 2 * Math.PI);  // top-right
         cr.lineTo(x + w, y + h);
         cr.lineTo(x, y + h);
+        cr.closePath();
+    }
+
+    // A bar rounded at both ends (the speak states). Needs h >= 2r.
+    _capsule(cr, x, y, w, h, r) {
+        cr.newSubPath();
+        cr.arc(x + r, y + r, r, Math.PI, 2 * Math.PI);
+        cr.arc(x + w - r, y + h - r, r, 0, Math.PI);
         cr.closePath();
     }
 

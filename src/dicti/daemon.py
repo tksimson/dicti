@@ -49,6 +49,7 @@ from pathlib import Path
 
 import requests
 
+from dicti import speak
 from dicti.config import Config
 from dicti.insert import make_inserter
 
@@ -267,6 +268,8 @@ class Daemon:
         self.recorder = None
 
     def start_recording(self) -> None:
+        if speak.running_pid() is not None:  # the mic must not hear dicti's own voice
+            speak.stop()
         with self.lock:
             if self.state == State.PROCESSING:
                 log.info("START rejected; state=PROCESSING")

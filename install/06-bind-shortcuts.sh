@@ -22,9 +22,10 @@ SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
 PATH_PREFIX="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 TOGGLE_PATH="$PATH_PREFIX/dictate-toggle/"
 MEMO_PATH="$PATH_PREFIX/dicti-memo/"
+SPEAK_PATH="$PATH_PREFIX/dicti-speak/"
 
 echo "==> Registering custom-keybindings list"
-gsettings set "$SCHEMA" custom-keybindings "['$TOGGLE_PATH', '$MEMO_PATH']"
+gsettings set "$SCHEMA" custom-keybindings "['$TOGGLE_PATH', '$MEMO_PATH', '$SPEAK_PATH']"
 
 echo "==> Binding Super+Shift+Alt+F12 -> dictate-toggle (TOGGLE)"
 # The Copilot key (e.g. Lenovo) natively emits Super+Shift+F23 (Microsoft AI-key
@@ -39,6 +40,12 @@ echo "==> Binding Ctrl+Copilot -> dicti --memo-toggle (record mp3; Copilot again
 gsettings set "$SUB_SCHEMA:$MEMO_PATH" name 'dicti mp3 recording'
 gsettings set "$SUB_SCHEMA:$MEMO_PATH" command "$HOME/.local/bin/dicti --memo-toggle"
 gsettings set "$SUB_SCHEMA:$MEMO_PATH" binding '<Control><Super><Shift><Alt>F12'
+
+echo "==> Binding AltGr+Copilot -> dicti --speak-toggle (read highlighted text aloud; again = stop)"
+# keyd's [altgr] layer turns AltGr+Copilot into Super+Shift+Alt+F11 (keyd/default.conf).
+gsettings set "$SUB_SCHEMA:$SPEAK_PATH" name 'dicti speak'
+gsettings set "$SUB_SCHEMA:$SPEAK_PATH" command "$HOME/.local/bin/dicti --speak-toggle"
+gsettings set "$SUB_SCHEMA:$SPEAK_PATH" binding '<Super><Shift><Alt>F11'
 
 echo
 echo "==> Verify in: Settings -> Keyboard -> View and Customize Shortcuts -> Custom Shortcuts"

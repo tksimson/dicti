@@ -5,6 +5,16 @@ All notable changes to dicti are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Read the highlighted text aloud.** Highlight text in any app and press AltGr+Copilot
+  (`dicti --speak-toggle`); press it again, or plain Copilot, to stop. Each sentence is spoken in Polish or English,
+  picked from the sentence, by Supertonic 3 running offline in the parakeet venv
+  (`install/03c-install-tts.sh`, ~400 MB). Four voices and three speeds in the panel menu. Speech starts after the first sentence. It will not start while dicti is
+  recording, and starting dictation stops it, so the microphone never hears it. The panel
+  icon turns into green bars that breathe while the voice loads and ripple out from the
+  middle while it speaks. The menu gains "Read highlighted text" and, while reading,
+  "Stop reading".
+
 ## [0.4.0] - 2026-10-13
 
 New engine release: Parakeet is the default, words appear about 5x sooner, Polish types

@@ -24,7 +24,9 @@ from pathlib import Path
 from dicti.config import _config_path
 
 USAGE = """usage: dicti -mp3 NAME       record to ./NAME.mp3 (Enter or Ctrl+C stops)
-       dicti --memo-toggle   start / stop-and-save a recording (bind to a key)"""
+       dicti --memo-toggle   start / stop-and-save a recording (bind to a key)
+       dicti --speak-toggle  read the highlighted text aloud / stop (bind to a key)
+       dicti --speak-voice F1|F3|M1|M4    dicti --speak-speed slower|normal|faster"""
 
 STOP_WAIT_SEC = 10  # how long a stop waits for ffmpeg to finish the file
 
@@ -81,9 +83,12 @@ def _start(out: Path, detach: bool = False) -> subprocess.Popen:
                             stdin=out_fd, stdout=out_fd, stderr=out_fd)
 
 
-def _notify(summary: str, body: str = "") -> None:
+def _notify(summary: str, body: str = "", transient: bool = False) -> None:
+    """transient = a passing refusal that should not pile up in the notification list."""
+    flags = ["-u", "low", "-e"] if transient else []
     try:
-        subprocess.run(["notify-send", "-a", "dicti", summary, body], timeout=5, check=False)
+        subprocess.run(["notify-send", "-a", "dicti", *flags, summary, body],
+                       timeout=5, check=False)
     except (OSError, subprocess.TimeoutExpired):
         pass
 
@@ -118,16 +123,21 @@ def save_dir() -> Path:
     return Path.home()
 
 
-def running_pid() -> int | None:
-    """PID of the hotkey recording in progress, or None. Checks the process is really ours,
+def _running_pid(pid_path: Path, marker: str) -> int | None:
+    """PID in pid_path if that process is alive and really ours (marker in its cmdline),
     so a stale pidfile whose PID was reused never gets signalled."""
     try:
-        pid = int(_pid_path().read_text().strip())
-        if b"pw-record" in Path(f"/proc/{pid}/cmdline").read_bytes():
+        pid = int(pid_path.read_text().strip())
+        if marker.encode() in Path(f"/proc/{pid}/cmdline").read_bytes():
             return pid
     except (OSError, ValueError):
         pass
     return None
+
+
+def running_pid() -> int | None:
+    """PID of the hotkey recording in progress, or None."""
+    return _running_pid(_pid_path(), "pw-record")
 
 
 def _stop_group(pid: int) -> None:
@@ -222,6 +232,12 @@ def main(argv: list[str] | None = None) -> int:
     os.umask(0o077)  # recordings are readable by their owner only
     if args == ["--memo-toggle"]:
         return memo_toggle()
+    if args and args[0].startswith("--speak-"):
+        from dicti import speak  # speak imports this module
+        if args == ["--speak-toggle"]:
+            return speak.speak_toggle()
+        if len(args) == 2 and args[0] in ("--speak-voice", "--speak-speed"):
+            return speak.save_setting(args[0].removeprefix("--speak-"), args[1])
     if len(args) == 2 and args[0] in ("-mp3", "--mp3"):
         return record_to_file(args[1])
     print(USAGE, file=sys.stderr)

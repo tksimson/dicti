@@ -38,7 +38,7 @@ except (ValueError, ImportError):
 
 from gi.repository import Gio, GLib, Gtk
 
-from dicti import memo
+from dicti import memo, speak
 
 _XDG = os.environ.get("XDG_RUNTIME_DIR")
 if not _XDG:
@@ -56,12 +56,18 @@ ICONS = {
     "IDLE": "dicti-idle",
     "LISTENING": "dicti-listening",
     "PROCESSING": "dicti-processing",
+    "PREPARING": "dicti-preparing",
+    "SPEAKING": "dicti-speaking",
 }
 LABELS = {
     "IDLE": "Idle",
     "LISTENING": "Listening… (click to stop)",
     "PROCESSING": "Transcribing…",
+    "PREPARING": "Getting the voice ready…",
+    "SPEAKING": "Reading aloud…",
 }
+SPEAK_STATES = ("PREPARING", "SPEAKING")
+DICTI = str(Path.home() / ".local/bin/dicti")
 
 
 def send_command(cmd: str) -> None:
@@ -95,10 +101,19 @@ class Indicator:
         # One state-aware item: "Start dictation" when idle (START), "Stop dictation"
         # while listening (STOP). You can't start twice. Greyed while transcribing.
         self.dictate_item = Gtk.MenuItem(label="Start dictation")
-        self.dictate_item.connect(
-            "activate",
-            lambda _: send_command("START" if self._state == "IDLE" else "STOP"))
+        self.dictate_item.connect("activate", self._on_dictate)
         menu.append(self.dictate_item)
+        # The way in without a Copilot key. Opening the menu keeps the primary selection.
+        self.read_item = Gtk.MenuItem(label="Read highlighted text")
+        self.read_item.connect("activate", lambda _: Gio.Subprocess.new(
+            [DICTI, "--speak-toggle"], Gio.SubprocessFlags.NONE))
+        menu.append(self.read_item)
+        for key, title, options in (
+                ("voice", "Voice", (("F1", "Female 1"), ("F3", "Female 2"),
+                                    ("M1", "Male 1"), ("M4", "Male 2"))),
+                ("speed", "Speed", (("slower", "Slower"), ("normal", "Normal"),
+                                    ("faster", "Faster")))):
+            menu.append(self._choice_menu(key, title, options))
         menu.append(Gtk.SeparatorMenuItem())
         # Whisper's translate task: speak any language, type English. The check item
         # mirrors the daemon's real state (dictation.translate file); a guard flag stops
@@ -121,13 +136,36 @@ class Indicator:
         item.connect("activate", cb)
         menu.append(item)
 
+    def _choice_menu(self, key, title, options):
+        """Voice or speed for reading aloud, as radio items saved by speak.save_setting."""
+        current = speak.settings()[key]
+        sub = Gtk.Menu()
+        group = None
+        for value, label in options:
+            item = Gtk.RadioMenuItem.new_with_label_from_widget(group, label)
+            group = group or item
+            item.set_active(value == current)
+            item.connect("toggled", lambda it, v=value: it.get_active()
+                         and speak.save_setting(key, v))
+            sub.append(item)
+        parent = Gtk.MenuItem(label=title)
+        parent.set_submenu(sub)
+        return parent
+
+    def _on_dictate(self, _item):
+        if self._state in SPEAK_STATES:  # "Stop reading"
+            Gio.Subprocess.new([DICTI, "--speak-toggle"], Gio.SubprocessFlags.NONE)
+        else:
+            send_command("START" if self._state == "IDLE" else "STOP")
+
     def _read_state(self) -> str:
         if memo.running_pid() is not None:  # an mp3 recording shows as listening
             return "LISTENING"
         try:
-            return STATE_PATH.read_text().strip() or "IDLE"
+            state = STATE_PATH.read_text().strip() or "IDLE"
         except OSError:
-            return "IDLE"
+            state = "IDLE"
+        return state if state != "IDLE" else (speak.phase() or "IDLE")
 
     def _read_translate(self) -> bool:
         try:
@@ -140,10 +178,13 @@ class Indicator:
         icon = ICONS.get(state, ICONS["IDLE"])
         self.ind.set_icon_full(icon, state.title())
         self.status_item.set_label(LABELS.get(state, state))
-        # IDLE -> "Start dictation"; otherwise "Stop dictation"; greyed while transcribing.
+        # IDLE -> "Start dictation"; reading aloud -> "Stop reading"; otherwise "Stop
+        # dictation"; greyed while transcribing. "Read highlighted text" only when idle.
         self.dictate_item.set_label(
-            "Start dictation" if state == "IDLE" else "Stop dictation")
+            "Start dictation" if state == "IDLE"
+            else "Stop reading" if state in SPEAK_STATES else "Stop dictation")
         self.dictate_item.set_sensitive(state != "PROCESSING")
+        self.read_item.set_visible(state == "IDLE")
 
     def _apply_translate(self, on: bool):
         if self.translate_item.get_active() == on:

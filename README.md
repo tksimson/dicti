@@ -150,6 +150,9 @@ its `KEY_*` name and edit `keyd/default.conf`.
   (bind it to a key). One-directional, English is always the target (a Whisper limit).
 - **Just record audio:** `dicti -mp3 notes` saves `./notes.mp3` (Enter stops). Ctrl+Copilot
   starts a recording, Copilot again stops it and asks where to save.
+- **Hear it instead:** highlight text in any app and press AltGr+Copilot; dicti reads it aloud
+  (Polish or English, picked from the text). AltGr+Copilot again, or Copilot, stops it.
+  Offline Supertonic 3 voices; pick the voice and speed in the panel menu.
 
 ## Configuration
 
